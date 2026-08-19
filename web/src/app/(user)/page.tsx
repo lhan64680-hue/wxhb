@@ -94,7 +94,7 @@ export default function IndexPage() {
                         <h1 className="mt-3 bg-gradient-to-r from-pink-500 via-violet-500 to-cyan-500 bg-clip-text text-4xl font-semibold tracking-tight text-transparent sm:text-5xl">创作，从灵感开始</h1>
                     </div>
 
-                    <div className="relative mx-auto mt-4 min-h-[540px] w-full max-w-[1120px] flex-1 lg:min-h-[620px]" aria-label="创作工具莫比乌斯轨道">
+                    <div className="relative mx-auto mt-4 hidden min-h-[620px] w-full max-w-[1120px] flex-1 lg:block" aria-label="创作工具莫比乌斯轨道">
                         <svg viewBox="0 0 1000 540" className="pointer-events-none absolute inset-0 size-full overflow-visible" aria-hidden="true">
                             <defs>
                                 <linearGradient id="home-orbit-ribbon" x1="80" y1="270" x2="920" y2="270" gradientUnits="userSpaceOnUse">
