@@ -16,6 +16,7 @@ export type NodeGenerationContext = {
     referenceVideos: ReferenceVideo[];
     referenceAudios: ReferenceAudio[];
     h3FullReference: boolean;
+    h3GenerationMode: "standard" | "multi-reference" | "turbo-4step";
     videoMultiPrompt: VideoMultiPromptItem[];
     videoElementList: VideoElementItem[];
     textCount: number;
@@ -64,7 +65,8 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     const frameReferences = readFrameReferences(sourceNode, inputs);
     const frameNodeIds = new Set([frameReferences.firstFrame?.id, frameReferences.lastFrame?.id].filter((id): id is string => Boolean(id)));
     const effectiveReferenceImages = referenceImages.filter((image) => !frameNodeIds.has(image.id));
-    const h3FullReference = sourceNode?.metadata?.h3ReferenceMode === "full";
+    const h3GenerationMode = resolveH3GenerationMode(sourceNode);
+    const h3FullReference = h3GenerationMode === "multi-reference";
     const h3References = h3FullReference ? selectH3FullReferences(sourceNode, inputs) : emptyH3FullReferences();
 
     return {
@@ -75,6 +77,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
         referenceVideos: h3FullReference ? h3References.videos : referenceVideos,
         referenceAudios: h3FullReference ? h3References.audios : referenceAudios,
         h3FullReference,
+        h3GenerationMode,
         videoMultiPrompt: advanced.videoMultiPrompt,
         videoElementList: advanced.videoElementList,
         textCount: inputs.filter((input) => input.type === "text").length,
@@ -130,7 +133,8 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
     const frameReferences = readFrameReferences(sourceNode, inputs);
     const frameNodeIds = new Set([frameReferences.firstFrame?.id, frameReferences.lastFrame?.id].filter((id): id is string => Boolean(id)));
     const effectiveReferenceImages = referenceImages.filter((image) => !frameNodeIds.has(image.id));
-    const h3FullReference = sourceNode?.metadata?.h3ReferenceMode === "full";
+    const h3GenerationMode = resolveH3GenerationMode(sourceNode);
+    const h3FullReference = h3GenerationMode === "multi-reference";
     const h3References = h3FullReference ? selectH3FullReferences(sourceNode, inputs) : emptyH3FullReferences();
 
     if (!hasToken) {
@@ -142,6 +146,7 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
             referenceVideos: h3FullReference ? h3References.videos : [],
             referenceAudios: h3FullReference ? h3References.audios : [],
             h3FullReference,
+            h3GenerationMode,
             videoMultiPrompt: advanced.videoMultiPrompt,
             videoElementList: advanced.videoElementList,
             textCount: 0,
@@ -159,6 +164,7 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
         referenceVideos: h3FullReference ? h3References.videos : referenceVideos,
         referenceAudios: h3FullReference ? h3References.audios : referenceAudios,
         h3FullReference,
+        h3GenerationMode,
         videoMultiPrompt: advanced.videoMultiPrompt,
         videoElementList: advanced.videoElementList,
         textCount: counts.text,
@@ -169,6 +175,12 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
 }
 
 type H3FullReferences = { images: ReferenceImage[]; videos: ReferenceVideo[]; audios: ReferenceAudio[] };
+
+function resolveH3GenerationMode(sourceNode?: CanvasNodeData): "standard" | "multi-reference" | "turbo-4step" {
+    const mode = sourceNode?.metadata?.h3GenerationMode;
+    if (mode === "multi-reference" || mode === "turbo-4step" || mode === "standard") return mode;
+    return sourceNode?.metadata?.h3ReferenceMode === "full" ? "multi-reference" : "standard";
+}
 
 function emptyH3FullReferences(): H3FullReferences {
     return { images: [], videos: [], audios: [] };

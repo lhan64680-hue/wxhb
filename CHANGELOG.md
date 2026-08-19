@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.5.14
+
++ [新增] 画布 MiniMax-H3 视频节点新增“标准 / 多参考 / 4 步 Turbo”三种可切换运行模式：标准采用 20 步采样，多参考切换至 Ref2VA，Turbo 使用本地 v4-600 LoRA 与双流 4 步采样器。
++ [优化] H3 Turbo 默认沿用 SageAttention、DynamicVRAM 与低显存 LoRA 合并路径，适配 RTX 5060 Ti 16GB；已完成 5 秒、864×480 的真实 Turbo 成片验证，ComfyUI 记录 159.71 秒。
++ [优化] Turbo 权重经国内镜像入口直连下载并以 SHA-256 校验；画布运行期间只访问本机 H3 端口，不经过应用代理。
+
 ## v0.5.13
 
 + [修复] 移除 Topaz 高清任务对安装包内 `ffprobe.exe` 的调用，避免该程序在部分 MP4 上崩溃并弹出 Windows 内存读取错误框；视频宽高统一由浏览器读取并随任务提交。

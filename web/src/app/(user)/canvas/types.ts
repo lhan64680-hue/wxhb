@@ -93,6 +93,7 @@ export type CanvasNodeMetadata = {
     firstFrameNodeId?: string;
     lastFrameNodeId?: string;
     h3ReferenceMode?: "frames" | "full";
+    h3GenerationMode?: "standard" | "multi-reference" | "turbo-4step";
     h3ReferenceNodeIds?: string[];
     multiShot?: string;
     shotType?: string;

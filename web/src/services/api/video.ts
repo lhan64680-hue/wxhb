@@ -324,6 +324,7 @@ async function createMiniMaxH3VideoRequestBody(config: AiConfig, model: string, 
     return {
         model: "MiniMaxAI/MiniMax-H3",
         prompt,
+        h3_mode: config.h3GenerationMode === "multi-reference" || config.h3GenerationMode === "turbo-4step" ? config.h3GenerationMode : "standard",
         seconds: normalizeMiniMaxH3Seconds(config.videoSeconds),
         task: referenceMode ? "ref2va" : hasKeyframes ? "fl2va" : "t2va",
         conditions,

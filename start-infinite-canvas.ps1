@@ -11,6 +11,8 @@ $h3Root = Join-Path $runtimeRoot "h3-runtime\work"
 $h3EngineApp = Join-Path $h3Root "ComfyUI\main.py"
 $h3SagePython = Join-Path $runtimeRoot "h3-sage-cu128\Scripts\python.exe"
 $h3AdapterApp = Join-Path $h3Root "webui\app.py"
+$h3TurboAssets = Join-Path $appRoot "runtime-assets\minimax-h3-turbo"
+$h3TurboNode = Join-Path $h3Root "ComfyUI\custom_nodes\ComfyUI-MiniMax-H3-Turbo"
 $h3AdapterVenvPython = Join-Path $h3Root "venv\Scripts\python.exe"
 $h3AdapterFallbackPython = "E:\codex\youmedhub\local-asr\runtime\python\cpython-3.12.13-windows-x86_64-none\python.exe"
 $h3AdapterSitePackages = Join-Path $h3Root "venv\Lib\site-packages"
@@ -49,6 +51,22 @@ function Test-H3SageRuntime {
     return $LASTEXITCODE -eq 0
 }
 
+function Sync-H3TurboNode {
+    $files = @("__init__.py", "h3_silu_temb_grid.safetensors", "pyproject.toml", "LICENSE")
+    if (-not (Test-Path -LiteralPath $h3TurboAssets)) {
+        return
+    }
+    foreach ($file in $files) {
+        if (-not (Test-Path -LiteralPath (Join-Path $h3TurboAssets $file))) {
+            return
+        }
+    }
+    New-Item -ItemType Directory -Force -Path $h3TurboNode | Out-Null
+    foreach ($file in $files) {
+        Copy-Item -LiteralPath (Join-Path $h3TurboAssets $file) -Destination (Join-Path $h3TurboNode $file) -Force
+    }
+}
+
 function Start-AppProcess {
     param(
         [string]$Name,
@@ -85,6 +103,8 @@ if (-not [string]::IsNullOrWhiteSpace($pathValue)) {
 }
 $env:GOMODCACHE = Join-Path $runtimeRoot "go-mod-cache"
 $env:GOCACHE = Join-Path $runtimeRoot "go-build-cache"
+
+Sync-H3TurboNode
 
 if (-not (Test-ListeningPort 8188)) {
     if ((Test-Path -LiteralPath $h3EngineApp) -and (Test-H3SageRuntime)) {

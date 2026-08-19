@@ -44,6 +44,7 @@ export type AiConfig = {
     videoGenerateAudio: string;
     videoWatermark: string;
     videoCharacterOrientation: string;
+    h3GenerationMode?: "standard" | "multi-reference" | "turbo-4step";
     systemPrompt: string;
     models: string[];
     imageModels: string[];

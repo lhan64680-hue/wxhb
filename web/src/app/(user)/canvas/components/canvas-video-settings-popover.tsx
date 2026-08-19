@@ -221,19 +221,30 @@ function H3ReferenceSettings({
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     onMetadataChange?: CanvasVideoSettingsPopoverProps["onMetadataChange"];
 }) {
-    const fullReference = metadata?.h3ReferenceMode === "full";
+    const generationMode =
+        metadata?.h3GenerationMode === "multi-reference" || metadata?.h3GenerationMode === "turbo-4step" || metadata?.h3GenerationMode === "standard" ? metadata.h3GenerationMode : metadata?.h3ReferenceMode === "full" ? "multi-reference" : "standard";
+    const fullReference = generationMode === "multi-reference";
     const selectedIds = normalizeNodeIds(metadata?.h3ReferenceNodeIds, 12);
+    const selectGenerationMode = (mode: "standard" | "multi-reference" | "turbo-4step") => {
+        onMetadataChange?.({ h3GenerationMode: mode, h3ReferenceMode: mode === "multi-reference" ? "full" : "frames" });
+    };
     return (
         <>
-            <CanvasSettingGroup title="H3 生成模式" color={theme.node.muted}>
-                <div className="grid grid-cols-2 gap-2.5">
-                    <OptionPill selected={!fullReference} theme={theme} onClick={() => onMetadataChange?.({ h3ReferenceMode: "frames" })}>
-                        首尾帧
+            <CanvasSettingGroup title="H3 运行模式" color={theme.node.muted}>
+                <div className="grid grid-cols-3 gap-2">
+                    <OptionPill selected={generationMode === "standard"} theme={theme} onClick={() => selectGenerationMode("standard")}>
+                        标准
                     </OptionPill>
-                    <OptionPill selected={fullReference} theme={theme} onClick={() => onMetadataChange?.({ h3ReferenceMode: "full" })}>
-                        全能参考
+                    <OptionPill selected={generationMode === "multi-reference"} theme={theme} onClick={() => selectGenerationMode("multi-reference")}>
+                        多参考
+                    </OptionPill>
+                    <OptionPill selected={generationMode === "turbo-4step"} theme={theme} onClick={() => selectGenerationMode("turbo-4step")}>
+                        4 步 Turbo
                     </OptionPill>
                 </div>
+                <p className="text-[11px] leading-4 opacity-60">
+                    {generationMode === "multi-reference" ? "Ref2VA：可同时使用图片、视频与音频参考。" : generationMode === "turbo-4step" ? "Turbo LoRA：5 秒视频仅执行 4 步采样，支持文生与首尾帧。" : "标准 H3：20 步采样，适合追求画面稳定与细节。"}
+                </p>
             </CanvasSettingGroup>
             {fullReference ? (
                 <CanvasSettingGroup title="全能参考素材" color={theme.node.muted}>

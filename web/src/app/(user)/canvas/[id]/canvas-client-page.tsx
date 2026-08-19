@@ -3083,6 +3083,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                             firstFrameNodeId: sourceNode?.metadata?.firstFrameNodeId,
                             lastFrameNodeId: sourceNode?.metadata?.lastFrameNodeId,
                             h3ReferenceMode: generationContext.h3FullReference ? "full" : sourceNode?.metadata?.h3ReferenceMode,
+                            h3GenerationMode: generationContext.h3GenerationMode,
                             h3ReferenceNodeIds: sourceNode?.metadata?.h3ReferenceNodeIds,
                             klingImageNodeIds: sourceNode?.metadata?.klingImageNodeIds,
                             klingMultiPrompt: sourceNode?.metadata?.klingMultiPrompt,
@@ -4817,10 +4818,11 @@ function referenceUrl(image: ReferenceImage) {
     return image.storageKey || image.url || (!image.dataUrl.startsWith("data:") ? image.dataUrl : undefined);
 }
 
-function withCanvasVideoAdvancedConfig(config: AiConfig, context: Pick<NodeGenerationContext, "videoMultiPrompt" | "videoElementList" | "h3FullReference">): AiConfig {
+function withCanvasVideoAdvancedConfig(config: AiConfig, context: Pick<NodeGenerationContext, "videoMultiPrompt" | "videoElementList" | "h3FullReference" | "h3GenerationMode">): AiConfig {
     const kieKlingV3 = isKIEKlingV3Config(config, config.model || config.videoModel);
     return {
         ...config,
+        h3GenerationMode: context.h3GenerationMode,
         ...(context.h3FullReference
             ? {
                   model: MINIMAX_H3_REFERENCE_TO_VIDEO_MODEL,
