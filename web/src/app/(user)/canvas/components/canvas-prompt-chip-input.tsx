@@ -24,9 +24,7 @@ type MentionState = {
     rect: DOMRect | null;
 };
 
-type PromptToken =
-    | { type: "text"; value: string }
-    | { type: "reference"; label: string };
+type PromptToken = { type: "text"; value: string } | { type: "reference"; label: string };
 
 export function CanvasPromptChipInput({ value, references, onChange, onSubmit, className, style, placeholder }: CanvasPromptChipInputProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -225,15 +223,7 @@ export function CanvasPromptChipInput({ value, references, onChange, onSubmit, c
                 }}
             />
 
-            {mention && candidates.length ? (
-                <MentionMenu
-                    rect={mention.rect}
-                    references={candidates}
-                    activeIndex={Math.min(activeIndex, candidates.length - 1)}
-                    theme={theme}
-                    onSelect={insertReference}
-                />
-            ) : null}
+            {mention && candidates.length ? <MentionMenu rect={mention.rect} references={candidates} activeIndex={Math.min(activeIndex, candidates.length - 1)} theme={theme} onSelect={insertReference} /> : null}
 
             {imagePreview ? (
                 <Image
@@ -356,11 +346,7 @@ function ReferencePreview({ reference }: { reference: CanvasResourceReference })
     );
 }
 
-function createReferenceChip(
-    reference: CanvasResourceReference,
-    theme: (typeof canvasThemes)[keyof typeof canvasThemes],
-    onImagePreview: (url: string) => void,
-) {
+function createReferenceChip(reference: CanvasResourceReference, theme: (typeof canvasThemes)[keyof typeof canvasThemes], onImagePreview: (url: string) => void) {
     const wrapper = document.createElement("span");
     wrapper.contentEditable = "false";
     wrapper.dataset.refLabel = reference.label;

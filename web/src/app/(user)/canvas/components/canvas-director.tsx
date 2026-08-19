@@ -75,8 +75,11 @@ export function CanvasDirector({
             if (type === "storyai:director-captures-sent") {
                 const captures = Array.isArray(event.data?.payload?.captures)
                     ? event.data.payload.captures
-                        .filter((capture: DirectorCapturePayload): capture is { dataUrl: string; fileName?: unknown } => typeof capture?.dataUrl === "string" && capture.dataUrl.startsWith("data:image/"))
-                        .map((capture: { dataUrl: string; fileName?: unknown }, index: number) => ({ dataUrl: capture.dataUrl, fileName: typeof capture.fileName === "string" && capture.fileName.trim() ? capture.fileName.trim() : "导演台截图-" + (index + 1) + ".png" }))
+                          .filter((capture: DirectorCapturePayload): capture is { dataUrl: string; fileName?: unknown } => typeof capture?.dataUrl === "string" && capture.dataUrl.startsWith("data:image/"))
+                          .map((capture: { dataUrl: string; fileName?: unknown }, index: number) => ({
+                              dataUrl: capture.dataUrl,
+                              fileName: typeof capture.fileName === "string" && capture.fileName.trim() ? capture.fileName.trim() : "导演台截图-" + (index + 1) + ".png",
+                          }))
                     : [];
                 if (captures.length) void onCapturesSent(nodeId, captures);
                 return;

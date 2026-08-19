@@ -39,12 +39,16 @@ export type UserStorageProviders = {
 };
 
 export async function syncUserStorageProvider(token: string, provider: UserStorageProviders) {
-    return apiPost<UserConfigPayload>("/api/v1/user-config/storage", {
-        provider: {
-            ...(provider.s3 ? { s3: toProviderPayload(provider.s3) } : {}),
-            ...(provider.webdav ? { webdav: toProviderPayload(provider.webdav) } : {}),
+    return apiPost<UserConfigPayload>(
+        "/api/v1/user-config/storage",
+        {
+            provider: {
+                ...(provider.s3 ? { s3: toProviderPayload(provider.s3) } : {}),
+                ...(provider.webdav ? { webdav: toProviderPayload(provider.webdav) } : {}),
+            },
         },
-    }, token);
+        token,
+    );
 }
 
 export async function measureUserStorageProvider(token: string, provider: UserStorageProvider) {

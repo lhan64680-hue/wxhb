@@ -59,7 +59,14 @@ export default function IndexPage() {
                         <p className="text-sm font-semibold">历史项目</p>
                         <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">本机自动保存</p>
                     </div>
-                    <button type="button" onClick={createAndEnter} disabled={!hydrated} className="inline-flex size-8 items-center justify-center rounded-full border border-violet-200 text-violet-600 transition hover:border-cyan-300 hover:text-cyan-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-violet-400/40 dark:text-violet-300" aria-label="新建项目" title="新建项目">
+                    <button
+                        type="button"
+                        onClick={createAndEnter}
+                        disabled={!hydrated}
+                        className="inline-flex size-8 items-center justify-center rounded-full border border-violet-200 text-violet-600 transition hover:border-cyan-300 hover:text-cyan-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-violet-400/40 dark:text-violet-300"
+                        aria-label="新建项目"
+                        title="新建项目"
+                    >
                         <Plus className="size-4" />
                     </button>
                 </div>
@@ -67,19 +74,29 @@ export default function IndexPage() {
                 <div className="hide-scrollbar min-h-0 space-y-1 overflow-y-auto px-3 pb-6">
                     {!hydrated ? <p className="px-2 py-4 text-xs text-stone-400">正在读取项目...</p> : null}
                     {hydrated && !projects.length ? (
-                        <button type="button" onClick={createAndEnter} className="w-full rounded-xl border border-dashed border-violet-200 px-3 py-5 text-left text-xs leading-5 text-stone-500 transition hover:border-cyan-300 hover:text-stone-700 dark:border-violet-400/30 dark:text-stone-400 dark:hover:text-stone-200">
+                        <button
+                            type="button"
+                            onClick={createAndEnter}
+                            className="w-full rounded-xl border border-dashed border-violet-200 px-3 py-5 text-left text-xs leading-5 text-stone-500 transition hover:border-cyan-300 hover:text-stone-700 dark:border-violet-400/30 dark:text-stone-400 dark:hover:text-stone-200"
+                        >
                             创建第一个画布项目
                         </button>
                     ) : null}
                     {projects.map((project, index) => (
-                        <Link key={project.id} href={`/canvas/${project.id}`} className={`group relative flex gap-2.5 rounded-xl px-2.5 py-3 transition hover:bg-white hover:shadow-[0_8px_24px_rgba(112,81,180,.09)] dark:hover:bg-white/[.06] ${index === 0 ? "bg-[linear-gradient(90deg,rgba(236,72,153,.10),rgba(34,211,238,.08))]" : ""}`}>
+                        <Link
+                            key={project.id}
+                            href={`/canvas/${project.id}`}
+                            className={`group relative flex gap-2.5 rounded-xl px-2.5 py-3 transition hover:bg-white hover:shadow-[0_8px_24px_rgba(112,81,180,.09)] dark:hover:bg-white/[.06] ${index === 0 ? "bg-[linear-gradient(90deg,rgba(236,72,153,.10),rgba(34,211,238,.08))]" : ""}`}
+                        >
                             {index === 0 ? <span className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-gradient-to-b from-pink-400 via-violet-400 to-cyan-400" /> : null}
                             <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-violet-100 bg-white text-violet-500 dark:border-white/10 dark:bg-white/5 dark:text-violet-300">
                                 <Network className="size-3.5" />
                             </span>
                             <span className="min-w-0">
                                 <span className="block truncate text-sm font-medium">{project.title}</span>
-                                <span className="mt-1 block truncate text-[11px] text-stone-400 dark:text-stone-500">{project.nodes.length} 节点 · {project.connections.length} 连接</span>
+                                <span className="mt-1 block truncate text-[11px] text-stone-400 dark:text-stone-500">
+                                    {project.nodes.length} 节点 · {project.connections.length} 连接
+                                </span>
                             </span>
                         </Link>
                     ))}
@@ -132,12 +149,42 @@ export default function IndexPage() {
                             </defs>
                             <g filter="url(#home-orbit-shadow)">
                                 {!hoveredToolId ? <animateTransform attributeName="transform" type="rotate" values="-0.7 500 270;0.7 500 270;-0.7 500 270" dur="14s" repeatCount="indefinite" /> : null}
-                                <path d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" transform="translate(0 19)" fill="none" stroke="url(#home-orbit-side)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="82" />
-                                <path d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" fill="none" stroke="url(#home-orbit-ribbon)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="76" />
+                                <path
+                                    d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270"
+                                    transform="translate(0 19)"
+                                    fill="none"
+                                    stroke="url(#home-orbit-side)"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="82"
+                                />
+                                <path
+                                    d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270"
+                                    fill="none"
+                                    stroke="url(#home-orbit-ribbon)"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="76"
+                                />
                                 <path d="M 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" transform="translate(0 19)" fill="none" stroke="url(#home-orbit-side)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="82" />
                                 <path d="M 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" fill="none" stroke="url(#home-orbit-ribbon)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="76" />
-                                <path d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" transform="translate(0 -25)" fill="none" stroke="url(#home-orbit-bevel)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="8" />
-                                <path d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" fill="none" stroke="url(#home-orbit-glow)" strokeLinecap="round" strokeWidth="10" strokeDasharray="130 1060">
+                                <path
+                                    d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270"
+                                    transform="translate(0 -25)"
+                                    fill="none"
+                                    stroke="url(#home-orbit-bevel)"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="8"
+                                />
+                                <path
+                                    d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270"
+                                    fill="none"
+                                    stroke="url(#home-orbit-glow)"
+                                    strokeLinecap="round"
+                                    strokeWidth="10"
+                                    strokeDasharray="130 1060"
+                                >
                                     {!hoveredToolId ? <animate attributeName="stroke-dashoffset" from="0" to="-1190" dur="7s" repeatCount="indefinite" /> : null}
                                 </path>
                             </g>
@@ -176,7 +223,12 @@ export default function IndexPage() {
                     <div className="mt-2 grid grid-cols-2 gap-3 lg:hidden">
                         {orbitTools.map((tool) => {
                             const Icon = tool.icon;
-                            return <Link key={tool.id} href={tool.href} className="flex items-center gap-3 rounded-2xl border border-violet-100 bg-white/80 p-4 text-sm font-medium shadow-sm dark:border-white/10 dark:bg-white/5"><Icon className="size-5 text-violet-500" />{tool.label}</Link>;
+                            return (
+                                <Link key={tool.id} href={tool.href} className="flex items-center gap-3 rounded-2xl border border-violet-100 bg-white/80 p-4 text-sm font-medium shadow-sm dark:border-white/10 dark:bg-white/5">
+                                    <Icon className="size-5 text-violet-500" />
+                                    {tool.label}
+                                </Link>
+                            );
                         })}
                     </div>
                 </div>

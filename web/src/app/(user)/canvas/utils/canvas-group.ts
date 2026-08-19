@@ -18,14 +18,16 @@ export function findGroupDropTarget(movedIds: Set<string>, nodes: CanvasNodeData
     if (nodes.some((node) => movedIds.has(node.id) && node.type === CanvasNodeType.Group)) return null;
 
     const movingNodes = nodes.filter((node) => movedIds.has(node.id) && node.type !== CanvasNodeType.Group);
-    return [...nodes].reverse().find((group) => {
-        if (group.type !== CanvasNodeType.Group || movedIds.has(group.id)) return false;
-        return movingNodes.some((node) => {
-            const centerX = node.position.x + node.width / 2;
-            const centerY = node.position.y + node.height / 2;
-            return centerX >= group.position.x && centerX <= group.position.x + group.width && centerY >= group.position.y && centerY <= group.position.y + group.height;
-        });
-    }) || null;
+    return (
+        [...nodes].reverse().find((group) => {
+            if (group.type !== CanvasNodeType.Group || movedIds.has(group.id)) return false;
+            return movingNodes.some((node) => {
+                const centerX = node.position.x + node.width / 2;
+                const centerY = node.position.y + node.height / 2;
+                return centerX >= group.position.x && centerX <= group.position.x + group.width && centerY >= group.position.y && centerY <= group.position.y + group.height;
+            });
+        }) || null
+    );
 }
 
 export function snapNodesIntoGroup(movedIds: Set<string>, nodes: CanvasNodeData[], group: CanvasNodeData) {

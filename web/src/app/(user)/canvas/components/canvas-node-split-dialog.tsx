@@ -140,10 +140,18 @@ export function CanvasNodeSplitDialog({ dataUrl, open, onClose, onConfirm }: { d
                         <NumberField label="行数" value={rows} onChange={(value) => updateCount("horizontal", value)} />
                         <NumberField label="列数" value={columns} onChange={(value) => updateCount("vertical", value)} />
                         <div className="grid grid-cols-2 gap-2">
-                            <Button icon={<Rows3 className="size-4" />} disabled={rows >= maxGridSize} onClick={() => addLine("horizontal")}>横向线</Button>
-                            <Button icon={<PanelTop className="size-4 rotate-90" />} disabled={columns >= maxGridSize} onClick={() => addLine("vertical")}>纵向线</Button>
-                            <Button icon={<Trash2 className="size-4" />} disabled={!active} onClick={deleteLine}>删除线</Button>
-                            <Button icon={<ListRestart className="size-4" />} onClick={resetLines}>重置线</Button>
+                            <Button icon={<Rows3 className="size-4" />} disabled={rows >= maxGridSize} onClick={() => addLine("horizontal")}>
+                                横向线
+                            </Button>
+                            <Button icon={<PanelTop className="size-4 rotate-90" />} disabled={columns >= maxGridSize} onClick={() => addLine("vertical")}>
+                                纵向线
+                            </Button>
+                            <Button icon={<Trash2 className="size-4" />} disabled={!active} onClick={deleteLine}>
+                                删除线
+                            </Button>
+                            <Button icon={<ListRestart className="size-4" />} onClick={resetLines}>
+                                重置线
+                            </Button>
                         </div>
                         <div className="rounded-xl border px-4 py-3 text-sm">
                             <div className="flex items-center justify-between">
@@ -174,16 +182,48 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
     );
 }
 
-function SplitGrid({ horizontalLines, verticalLines, active, onPointerDown, onPointerMove, onPointerEnd }: { horizontalLines: number[]; verticalLines: number[]; active: ActiveLine; onPointerDown: (axis: SplitAxis, index: number, event: ReactPointerEvent<HTMLDivElement>) => void; onPointerMove: (axis: SplitAxis, index: number, event: ReactPointerEvent<HTMLDivElement>) => void; onPointerEnd: (event: ReactPointerEvent<HTMLDivElement>) => void }) {
+function SplitGrid({
+    horizontalLines,
+    verticalLines,
+    active,
+    onPointerDown,
+    onPointerMove,
+    onPointerEnd,
+}: {
+    horizontalLines: number[];
+    verticalLines: number[];
+    active: ActiveLine;
+    onPointerDown: (axis: SplitAxis, index: number, event: ReactPointerEvent<HTMLDivElement>) => void;
+    onPointerMove: (axis: SplitAxis, index: number, event: ReactPointerEvent<HTMLDivElement>) => void;
+    onPointerEnd: (event: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
     return (
         <div className="pointer-events-none absolute inset-0">
             {verticalLines.map((line, index) => (
-                <div key={`column-${index}`} className="pointer-events-auto absolute inset-y-0 -ml-2 w-4 touch-none cursor-ew-resize select-none" style={{ left: `${line * 100}%` }} onPointerDown={(event) => onPointerDown("vertical", index, event)} onPointerMove={(event) => onPointerMove("vertical", index, event)} onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd} onLostPointerCapture={onPointerEnd}>
+                <div
+                    key={`column-${index}`}
+                    className="pointer-events-auto absolute inset-y-0 -ml-2 w-4 touch-none cursor-ew-resize select-none"
+                    style={{ left: `${line * 100}%` }}
+                    onPointerDown={(event) => onPointerDown("vertical", index, event)}
+                    onPointerMove={(event) => onPointerMove("vertical", index, event)}
+                    onPointerUp={onPointerEnd}
+                    onPointerCancel={onPointerEnd}
+                    onLostPointerCapture={onPointerEnd}
+                >
                     <div className={`absolute left-1/2 top-0 h-full border-l shadow-[0_0_0_1px_rgba(0,0,0,.35)] ${active?.axis === "vertical" && active.index === index ? "border-amber-300" : "border-white/90"}`} />
                 </div>
             ))}
             {horizontalLines.map((line, index) => (
-                <div key={`row-${index}`} className="pointer-events-auto absolute inset-x-0 -mt-2 h-4 touch-none cursor-ns-resize select-none" style={{ top: `${line * 100}%` }} onPointerDown={(event) => onPointerDown("horizontal", index, event)} onPointerMove={(event) => onPointerMove("horizontal", index, event)} onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd} onLostPointerCapture={onPointerEnd}>
+                <div
+                    key={`row-${index}`}
+                    className="pointer-events-auto absolute inset-x-0 -mt-2 h-4 touch-none cursor-ns-resize select-none"
+                    style={{ top: `${line * 100}%` }}
+                    onPointerDown={(event) => onPointerDown("horizontal", index, event)}
+                    onPointerMove={(event) => onPointerMove("horizontal", index, event)}
+                    onPointerUp={onPointerEnd}
+                    onPointerCancel={onPointerEnd}
+                    onLostPointerCapture={onPointerEnd}
+                >
                     <div className={`absolute left-0 top-1/2 w-full border-t shadow-[0_0_0_1px_rgba(0,0,0,.35)] ${active?.axis === "horizontal" && active.index === index ? "border-amber-300" : "border-white/90"}`} />
                 </div>
             ))}

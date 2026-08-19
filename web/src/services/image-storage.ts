@@ -65,38 +65,18 @@ export function canUseGlobalStorage(config: StorageConfig) {
 
 function isLocalNetworkHost(hostname: string) {
     const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
-    if (
-        host === "localhost" ||
-        host.endsWith(".localhost") ||
-        host.endsWith(".local") ||
-        host === "host.docker.internal" ||
-        host === "::1"
-    ) {
+    if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host === "host.docker.internal" || host === "::1") {
         return true;
     }
-    if (
-        host.includes(":") &&
-        (host.startsWith("fc") ||
-            host.startsWith("fd") ||
-            /^fe[89ab]/.test(host))
-    ) {
+    if (host.includes(":") && (host.startsWith("fc") || host.startsWith("fd") || /^fe[89ab]/.test(host))) {
         return true;
     }
     const parts = host.split(".").map(Number);
-    if (
-        parts.length !== 4 ||
-        parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
-    ) {
+    if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
         return false;
     }
     const [a, b] = parts;
-    return (
-        a === 10 ||
-        a === 127 ||
-        (a === 172 && b >= 16 && b <= 31) ||
-        (a === 192 && b === 168) ||
-        (a === 169 && b === 254)
-    );
+    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
 }
 
 export function getProxyUrl(url: string): string {
@@ -105,11 +85,7 @@ export function getProxyUrl(url: string): string {
     }
     try {
         const parsed = new URL(url);
-        if (
-            isLocalNetworkHost(parsed.hostname) ||
-            (typeof window !== "undefined" &&
-                parsed.host === window.location.host)
-        ) {
+        if (isLocalNetworkHost(parsed.hostname) || (typeof window !== "undefined" && parsed.host === window.location.host)) {
             return url;
         }
     } catch {
@@ -124,12 +100,12 @@ export async function uploadImage(input: string | Blob, options: UploadImageOpti
     if (typeof url === "string") {
         const response = await fetch(url);
         if (!response.ok) {
-            const payload = await response.json().catch(() => null) as { msg?: string } | null;
+            const payload = (await response.json().catch(() => null)) as { msg?: string } | null;
             throw new Error(payload?.msg || `代理图片拉取失败：${response.status}`);
         }
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("application/json")) {
-            const payload = await response.json().catch(() => null) as { msg?: string } | null;
+            const payload = (await response.json().catch(() => null)) as { msg?: string } | null;
             throw new Error(payload?.msg || "代理图片下载失败");
         }
         blob = await response.blob();
@@ -151,7 +127,7 @@ export async function uploadImage(input: string | Blob, options: UploadImageOpti
 export async function uploadRemoteImageToServer(url: string, filename: string): Promise<UploadedImage> {
     const response = await fetch(getProxyUrl(url));
     if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { msg?: string } | null;
+        const payload = (await response.json().catch(() => null)) as { msg?: string } | null;
         throw new Error(payload?.msg || "代理图片拉取失败：" + response.status);
     }
     const blob = await response.blob();
@@ -282,9 +258,10 @@ export async function imageToDataUrl(image: { url?: string; dataUrl?: string; st
 export async function deleteStoredImages(keys: Iterable<string>) {
     const { useAssetStore } = await import("@/stores/use-asset-store");
     const assetKeys = new Set(
-        useAssetStore.getState().assets
-            .map((a) => (a.kind !== "text" ? a.data.storageKey : null))
-            .filter((k): k is string => Boolean(k))
+        useAssetStore
+            .getState()
+            .assets.map((a) => (a.kind !== "text" ? a.data.storageKey : null))
+            .filter((k): k is string => Boolean(k)),
     );
     await Promise.all(
         Array.from(new Set(keys)).map(async (key) => {

@@ -11,5 +11,5 @@
     "bracketSameLine": false,
     "arrowParens": "always",
     "embeddedLanguageFormatting": "auto",
-    "endOfLine": "lf"
+    "endOfLine": "auto"
 }

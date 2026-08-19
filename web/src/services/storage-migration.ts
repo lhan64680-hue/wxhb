@@ -33,9 +33,7 @@ export async function checkLocalAssetsExist(): Promise<boolean> {
     return found;
 }
 
-export async function migrateLocalAssetsToCloud(
-    onProgress: (current: number, total: number) => void
-): Promise<void> {
+export async function migrateLocalAssetsToCloud(onProgress: (current: number, total: number) => void): Promise<void> {
     const token = useUserStore.getState().token;
     if (!token) throw new Error("请先登录");
 
@@ -132,8 +130,7 @@ export async function migrateLocalAssetsToCloud(
             const canvasStr = JSON.stringify({
                 projects: canvasProjects,
             });
-            const replacedCanvasStr =
-                await replaceKeysInString(canvasStr);
+            const replacedCanvasStr = await replaceKeysInString(canvasStr);
             const nextCanvas = JSON.parse(replacedCanvasStr);
             const finalCanvas = {
                 projects: nextCanvas.projects || [],
@@ -151,15 +148,9 @@ export async function migrateLocalAssetsToCloud(
                     }),
                 );
             useCanvasStore.setState(finalCanvas);
-            await useCanvasStore.getState().syncWithRemote(
-                token,
-                true,
-            );
+            await useCanvasStore.getState().syncWithRemote(token, true);
         } catch (error) {
-            console.error(
-                "Failed to migrate canvas projects",
-                error,
-            );
+            console.error("Failed to migrate canvas projects", error);
         }
     }
 
@@ -174,8 +165,7 @@ export async function migrateLocalAssetsToCloud(
             const mergedAssets = mergeAssets(remoteAssets?.assets || [], nextAssets.assets);
             const finalAssets = { assets: mergedAssets };
             // Save locally
-            await localforage.createInstance({ name: "infinite-canvas", storeName: "app_state" })
-                .setItem("infinite-canvas:asset_store", JSON.stringify({ state: finalAssets }));
+            await localforage.createInstance({ name: "infinite-canvas", storeName: "app_state" }).setItem("infinite-canvas:asset_store", JSON.stringify({ state: finalAssets }));
             // Set in Zustand store
             useAssetStore.setState(finalAssets);
             // Sync to server
@@ -202,9 +192,7 @@ export async function migrateLocalAssetsToCloud(
 
             // Save locally
             await imageLogStore.clear();
-            await Promise.all(
-                nextLogsData.logs.map((log: any) => imageLogStore.setItem(log.id, log))
-            );
+            await Promise.all(nextLogsData.logs.map((log: any) => imageLogStore.setItem(log.id, log)));
             await imageCategoryStore.setItem("infinite-canvas:image_generation_categories", nextLogsData.categories);
 
             // Sync to server
@@ -229,9 +217,7 @@ export async function migrateLocalAssetsToCloud(
 
             // Save locally
             await videoLogStore.clear();
-            await Promise.all(
-                nextVideoLogsData.logs.map((log: any) => videoLogStore.setItem(log.id, log))
-            );
+            await Promise.all(nextVideoLogsData.logs.map((log: any) => videoLogStore.setItem(log.id, log)));
 
             // Sync to server
             await saveVideoGenerationLogs(token, nextVideoLogsData.logs);

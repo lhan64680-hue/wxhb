@@ -247,10 +247,7 @@ function parseGrsaiDrawResponseText(text: string): GrsaiDrawResponse {
     } catch (jsonError) {
         const eventPayload = findGrsaiSsePayload(content);
         if (eventPayload !== undefined) return normalizeGrsaiDrawResponse(eventPayload);
-        throw new ImageRequestError(
-            jsonError instanceof Error ? `GRS 图像响应解析失败：${jsonError.message}` : "GRS 图像响应解析失败",
-            content.slice(0, 2000),
-        );
+        throw new ImageRequestError(jsonError instanceof Error ? `GRS 图像响应解析失败：${jsonError.message}` : "GRS 图像响应解析失败", content.slice(0, 2000));
     }
 }
 
@@ -345,15 +342,13 @@ async function requestGrsaiDrawImages(config: AiConfig, prompt: string, referenc
             while (Date.now() < deadline) {
                 await new Promise((resolve) => window.setTimeout(resolve, 1500));
                 const remainingSeconds = Math.max(1, Math.ceil((deadline - Date.now()) / 1000));
-                const resultResponse = await withTimeout(
-                    Math.min(10, remainingSeconds),
-                    (signal) =>
-                        fetch(grsaiDirectApiUrl(config, "/draw/result"), {
-                            method: "POST",
-                            headers: grsaiDirectHeaders(config),
-                            body: JSON.stringify({ id: task.id }),
-                            signal,
-                        }),
+                const resultResponse = await withTimeout(Math.min(10, remainingSeconds), (signal) =>
+                    fetch(grsaiDirectApiUrl(config, "/draw/result"), {
+                        method: "POST",
+                        headers: grsaiDirectHeaders(config),
+                        body: JSON.stringify({ id: task.id }),
+                        signal,
+                    }),
                 );
                 if (!resultResponse.ok) {
                     const error = await fetchErrorDetail(resultResponse, "读取 GRS 图像任务失败");
@@ -577,8 +572,7 @@ async function parseImagesStreamResponse(response: Response, mime: string): Prom
             resultPayload = event as ImageApiResponse;
         }
         if (resolveImageDataUrl(event, mime)) {
-            const imageIndex =
-                typeof event.image_index === "number" || typeof event.image_index === "string" ? String(event.image_index) : `event-${imageItems.size}`;
+            const imageIndex = typeof event.image_index === "number" || typeof event.image_index === "string" ? String(event.image_index) : `event-${imageItems.size}`;
             imageItems.set(imageIndex, event);
         }
     });
@@ -716,7 +710,7 @@ async function writeLocalAICallLog(config: AiConfig, endpoint: string, startedAt
             responseBody,
             error,
         }),
-    }).catch(() => { });
+    }).catch(() => {});
 }
 
 function stringifyLogPayload(value: unknown) {
@@ -739,7 +733,7 @@ function redactLogImages(value: unknown) {
     const record = value as Record<string, unknown>;
     for (const key of Object.keys(record)) {
         const item = record[key];
-        if (typeof item === "string" && (item.startsWith("data:image/") || item.length > 2048 && looksLikeBase64(item))) {
+        if (typeof item === "string" && (item.startsWith("data:image/") || (item.length > 2048 && looksLikeBase64(item)))) {
             record[key] = `[redacted image/string len=${item.length}]`;
             continue;
         }
@@ -1284,21 +1278,20 @@ function normalizeAgnesImage21Ratio(value: string) {
     return "1:1";
 }
 
-function applyAgnesImageSize(
-    body: Record<string, unknown>,
-    config: AiConfig,
-    params: ImageRequestParams,
-) {
+function applyAgnesImageSize(body: Record<string, unknown>, config: AiConfig, params: ImageRequestParams) {
     if (!isAgnesImage21Model(config.model)) {
         if (params.size) body.size = params.size;
         return;
     }
-    body.size = ({
-        auto: "1K",
-        low: "2K",
-        medium: "3K",
-        high: "4K",
-    } as Record<string, string>)[params.quality] || "1K";
+    body.size =
+        (
+            {
+                auto: "1K",
+                low: "2K",
+                medium: "3K",
+                high: "4K",
+            } as Record<string, string>
+        )[params.quality] || "1K";
     body.ratio = normalizeAgnesImage21Ratio(config.size);
 }
 
@@ -1314,7 +1307,7 @@ async function requestAgnesImageEdit(config: AiConfig & { seedIndex?: number; se
                 if (publicUrl) return publicUrl;
             }
             return imageToDataUrl(ref);
-        })
+        }),
     );
 
     const body: Record<string, unknown> = {
@@ -1399,5 +1392,3 @@ export async function deleteCanvasImageTask(config: AiConfig, task?: CanvasImage
     const payload = (await response.json()) as { code?: number; msg?: string };
     if (payload.code !== 0) throw new ImageRequestError(payload.msg || "删除图片任务失败", payload);
 }
-
-

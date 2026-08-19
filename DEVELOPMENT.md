@@ -21,7 +21,7 @@
 ## 依赖说明
 
 - Node.js 使用系统安装版本；前端依赖保存在 `web/node_modules/`。
-- Go 1.25 本地工具链位于 `E:\codex\tools\go\`，项目缓存位于 `E:\codex\.go-mod-cache` 与 `E:\codex\.go-build-cache`。
+- Go 1.25 继续使用共享工具链 `E:\codex\tools\go\`；无限画布自己的 Go 缓存位于 `.runtime/go-mod-cache` 与 `.runtime/go-build-cache`，不再写入 `E:\codex` 根目录。
 - 项目源码使用 Git 管理；本地辅助脚本与源码放在同一项目中，便于继续比较和修改。
 
 ## MiniMax-H3 本地视频模型
@@ -29,3 +29,4 @@
 - MiniMax-H3 接入说明见 `MINIMAX_H3_LOCAL.md`。
 - 无限画布默认视频模型已设为 `minimax-h3/text-to-video`，本地直连渠道为 `http://127.0.0.1:7860`。
 - 当前机器为 RTX 5060 Ti 16GB，已接入可在本机运行的 MiniMax-H3 Comfy 本地后端；默认轻量档位生成 5 秒视频。
+- H3 引擎、模型、适配器及运行日志均放在 `.runtime/h3-runtime/work`；移动整个项目目录时不再依赖用户文档目录。

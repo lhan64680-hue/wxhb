@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$h3Launcher = "C:\Users\hc\Documents\Codex\2026-08-07\web-comfyui\work\start_h3.ps1"
+$h3Launcher = Join-Path $PSScriptRoot ".runtime\h3-runtime\work\start_h3.ps1"
 if (-not (Test-Path -LiteralPath $h3Launcher)) {
     throw "MiniMax H3 local launcher not found: $h3Launcher"
 }

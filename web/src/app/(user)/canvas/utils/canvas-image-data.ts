@@ -67,7 +67,14 @@ export async function splitDataUrl(dataUrl: string, params: ImageSplitParams): P
 }
 
 function buildSplitCuts(lines: number[], size: number) {
-    return [0, ...lines.map((line) => Math.round(line * size)).filter((line) => line > 0 && line < size).sort((a, b) => a - b), size];
+    return [
+        0,
+        ...lines
+            .map((line) => Math.round(line * size))
+            .filter((line) => line > 0 && line < size)
+            .sort((a, b) => a - b),
+        size,
+    ];
 }
 
 export async function transformAngleDataUrl(dataUrl: string, params: ImageAngleTransform) {

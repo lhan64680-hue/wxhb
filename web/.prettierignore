@@ -12,3 +12,4 @@ bun.lock
 *.gif
 *.webp
 *.svg
+public/director

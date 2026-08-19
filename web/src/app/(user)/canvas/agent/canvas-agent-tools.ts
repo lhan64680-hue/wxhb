@@ -106,18 +106,8 @@ export const CANVAS_AGENT_TOOLS: CanvasAgentToolDefinition[] = [
         },
         ["phase"],
     ),
-    defineTool(
-        "create_primary_script_node",
-        "仅用于新创作流程首次创建正式主剧本或总制作稿，固定使用主剧本节点尺寸。",
-        { title: STRING, content: STRING, sourceNodeIds: STRING_ARRAY, projectTitle: STRING },
-        ["title", "content", "projectTitle"],
-    ),
-    defineTool(
-        "create_text_node",
-        "创建镜头、角色、产品、场景、声音说明和其他普通文本节点；不得用于首次正式主剧本。",
-        { title: STRING, content: STRING, sourceNodeIds: STRING_ARRAY },
-        ["title", "content"],
-    ),
+    defineTool("create_primary_script_node", "仅用于新创作流程首次创建正式主剧本或总制作稿，固定使用主剧本节点尺寸。", { title: STRING, content: STRING, sourceNodeIds: STRING_ARRAY, projectTitle: STRING }, ["title", "content", "projectTitle"]),
+    defineTool("create_text_node", "创建镜头、角色、产品、场景、声音说明和其他普通文本节点；不得用于首次正式主剧本。", { title: STRING, content: STRING, sourceNodeIds: STRING_ARRAY }, ["title", "content"]),
     defineTool("update_text_node", "更新现有文本节点的标题或正文。", { nodeId: STRING, title: STRING, content: STRING }, ["nodeId"]),
     defineTool("update_node", "只更新现有节点标题；不允许任意字段覆盖。", { nodeId: STRING, title: STRING }, ["nodeId", "title"]),
     defineTool("delete_node", "使用画布现有删除链路删除节点及关联连线。", { nodeId: STRING }, ["nodeId"]),
@@ -137,12 +127,10 @@ export const CANVAS_AGENT_TOOLS: CanvasAgentToolDefinition[] = [
         },
         ["prompt", "sourceNodeIds"],
     ),
-    defineTool(
-        "edit_image",
-        "调用现有图片编辑链路，必须提供至少一个真实图片来源节点；图片按 sourceNodeIds 顺序编号。",
-        { prompt: STRING, title: STRING, sourceNodeIds: STRING_ARRAY, size: STRING, count: { type: "number", minimum: 1, maximum: 15 } },
-        ["prompt", "sourceNodeIds"],
-    ),
+    defineTool("edit_image", "调用现有图片编辑链路，必须提供至少一个真实图片来源节点；图片按 sourceNodeIds 顺序编号。", { prompt: STRING, title: STRING, sourceNodeIds: STRING_ARRAY, size: STRING, count: { type: "number", minimum: 1, maximum: 15 } }, [
+        "prompt",
+        "sourceNodeIds",
+    ]),
     defineTool(
         "generate_video",
         "调用现有视频任务链路。sourceNodeIds 只放真实直接来源，独立生成必须传空数组；其中图片、视频、音频分别按各自顺序编号。",
@@ -334,7 +322,10 @@ export function userLikelyRequestedCanvasAction(text: string) {
 }
 
 function extractJsonObject(content: string) {
-    const trimmed = content.trim().replace(/^\x60\x60\x60(?:json)?\s*/i, "").replace(/\s*\x60\x60\x60$/, "");
+    const trimmed = content
+        .trim()
+        .replace(/^\x60\x60\x60(?:json)?\s*/i, "")
+        .replace(/\s*\x60\x60\x60$/, "");
     const start = trimmed.indexOf("{");
     const end = trimmed.lastIndexOf("}");
     return start >= 0 && end > start ? trimmed.slice(start, end + 1) : "";
@@ -352,7 +343,14 @@ function optionalString(value: unknown) {
 
 function stringArray(value: unknown) {
     if (!Array.isArray(value)) return [];
-    return [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 50);
+    return [
+        ...new Set(
+            value
+                .filter((item): item is string => typeof item === "string")
+                .map((item) => item.trim())
+                .filter(Boolean),
+        ),
+    ].slice(0, 50);
 }
 
 function optionalStringArray(value: unknown, key: string) {

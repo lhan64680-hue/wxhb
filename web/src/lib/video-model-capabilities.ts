@@ -1,5 +1,8 @@
 export function modelKey(modelName: string) {
-    return modelName.trim().toLowerCase().replace(/[._/]+/g, "-");
+    return modelName
+        .trim()
+        .toLowerCase()
+        .replace(/[._/]+/g, "-");
 }
 
 export function supportsVideoFrameReferences(modelName: string) {

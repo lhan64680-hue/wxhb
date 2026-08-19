@@ -134,7 +134,14 @@ export default function AdminAICallLogsPage() {
                             <Button htmlType="submit" type="primary" icon={<SearchOutlined />}>
                                 查询
                             </Button>
-                            <Button icon={<ReloadOutlined />} onClick={() => { setKeyword(""); setPage(1); void loadLogs(); }}>
+                            <Button
+                                icon={<ReloadOutlined />}
+                                onClick={() => {
+                                    setKeyword("");
+                                    setPage(1);
+                                    void loadLogs();
+                                }}
+                            >
                                 重置
                             </Button>
                             <div className="flex h-8 items-center gap-2 rounded-md border border-stone-200 px-3 dark:border-stone-800">
@@ -144,7 +151,9 @@ export default function AdminAICallLogsPage() {
                             <div className="flex h-8 items-center gap-2">
                                 <Typography.Text className="whitespace-nowrap text-sm">清理超过</Typography.Text>
                                 <InputNumber min={1} value={clearDays} className="!w-24" onChange={(value) => setClearDays(Number(value) || 7)} />
-                                <Typography.Text type="secondary" className="shrink-0">天前</Typography.Text>
+                                <Typography.Text type="secondary" className="shrink-0">
+                                    天前
+                                </Typography.Text>
                             </div>
                             <Button danger icon={<DeleteOutlined />} loading={clearing} onClick={() => void clearLogs()} className="ml-0 lg:ml-auto">
                                 清理旧日志
@@ -152,7 +161,14 @@ export default function AdminAICallLogsPage() {
                         </div>
                     </Form>
                 </Card>
-                <Card variant="borderless" title={<span>AI 调用日志 <Tag>{total} 条</Tag></span>}>
+                <Card
+                    variant="borderless"
+                    title={
+                        <span>
+                            AI 调用日志 <Tag>{total} 条</Tag>
+                        </span>
+                    }
+                >
                     <Table
                         rowKey="id"
                         size="small"
@@ -181,9 +197,7 @@ export default function AdminAICallLogsPage() {
 }
 
 function LogBlock({ value }: { value: string }) {
-    return (
-        <pre className="max-h-[72vh] whitespace-pre-wrap break-words overflow-auto rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs leading-5 text-stone-700 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-200">{value || "-"}</pre>
-    );
+    return <pre className="max-h-[72vh] whitespace-pre-wrap break-words overflow-auto rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs leading-5 text-stone-700 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-200">{value || "-"}</pre>;
 }
 
 function formatTime(value: string) {

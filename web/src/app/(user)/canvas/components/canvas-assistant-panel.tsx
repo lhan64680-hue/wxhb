@@ -1,17 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
-import {
-    History,
-    Bot,
-    PanelRightClose,
-    Plus,
-    RotateCcw,
-    Sparkles,
-    Trash2,
-    Video,
-    X,
-} from "lucide-react";
+import { History, Bot, PanelRightClose, Plus, RotateCcw, Sparkles, Trash2, Video, X } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 import { motion } from "motion/react";
 import { nanoid } from "nanoid";
@@ -28,15 +18,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { createCanvasAgentState, runCanvasAgent } from "../agent/canvas-agent-runtime";
 import type { CanvasAgentContext } from "../agent/canvas-agent-context";
 import type { CanvasAgentAction, CanvasAgentToolResult } from "../agent/canvas-agent-tools";
-import {
-    CanvasNodeType,
-    type CanvasAgentConfig,
-    type CanvasAgentState,
-    type CanvasAssistantMessage,
-    type CanvasAssistantReference,
-    type CanvasAssistantSession,
-    type CanvasNodeData,
-} from "../types";
+import { CanvasNodeType, type CanvasAgentConfig, type CanvasAgentState, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "../types";
 import { isCanvasImageNodeType } from "../utils/canvas-panorama";
 import { AssistantReferenceChip, CanvasAssistantComposer } from "./canvas-assistant-composer";
 
@@ -119,11 +101,14 @@ export function CanvasAssistantPanel({
         activeSessionIdRef.current = resolvedActiveSessionId;
     }, [resolvedActiveSessionId, sessions]);
 
-    useEffect(() => () => {
-        abortRef.current?.abort();
-        pendingDeleteRef.current?.resolve(false);
-        pendingDeleteRef.current = null;
-    }, []);
+    useEffect(
+        () => () => {
+            abortRef.current?.abort();
+            pendingDeleteRef.current?.resolve(false);
+            pendingDeleteRef.current = null;
+        },
+        [],
+    );
 
     const activeSession = safeSessions.find((session) => session.id === resolvedActiveSessionId) || safeSessions[0] || null;
     const historySessions = safeSessions.filter((session) => session.messages.length > 0);
@@ -285,9 +270,7 @@ export function CanvasAssistantPanel({
                 ...current,
                 agentState: result.state,
                 protocolMessages: result.protocolMessages,
-                messages: current.messages.map((message) =>
-                    message.id === assistantId ? { ...message, text: result.reply, status: "success", activity: undefined } : message,
-                ),
+                messages: current.messages.map((message) => (message.id === assistantId ? { ...message, text: result.reply, status: "success", activity: undefined } : message)),
                 updatedAt: new Date().toISOString(),
             }));
         } catch (error) {
@@ -372,7 +355,15 @@ export function CanvasAssistantPanel({
                                     <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Trash2 className="size-4" />} disabled={!checkedChatIds.length} onClick={() => setDeleteChatIds(checkedChatIds)} />
                                 </Tooltip>
                                 <Tooltip title="删除全部">
-                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<X className="size-4" />} disabled={!historySessions.length} onClick={() => setDeleteChatIds(historySessions.map((session) => session.id))} />
+                                    <Button
+                                        type="text"
+                                        shape="circle"
+                                        className="!h-8 !w-8 !min-w-8"
+                                        style={iconButtonStyle}
+                                        icon={<X className="size-4" />}
+                                        disabled={!historySessions.length}
+                                        onClick={() => setDeleteChatIds(historySessions.map((session) => session.id))}
+                                    />
                                 </Tooltip>
                             </>
                         ) : null}
@@ -434,8 +425,12 @@ export function CanvasAssistantPanel({
                                     <div className="mt-0.5 text-xs opacity-55">相关连线和任务记录将按现有逻辑清理</div>
                                 </div>
                                 <div className="grid grid-cols-2 border-t" style={{ borderColor: theme.node.stroke }}>
-                                    <button type="button" className="h-9 cursor-pointer border-0 bg-transparent text-sm" style={{ color: theme.node.text }} onClick={() => settleDeleteConfirmation(false)}>取消</button>
-                                    <button type="button" className="h-9 cursor-pointer border-0 border-l bg-transparent text-sm font-medium" style={{ borderColor: theme.node.stroke, color: "#ef4444" }} onClick={() => settleDeleteConfirmation(true)}>确认删除</button>
+                                    <button type="button" className="h-9 cursor-pointer border-0 bg-transparent text-sm" style={{ color: theme.node.text }} onClick={() => settleDeleteConfirmation(false)}>
+                                        取消
+                                    </button>
+                                    <button type="button" className="h-9 cursor-pointer border-0 border-l bg-transparent text-sm font-medium" style={{ borderColor: theme.node.stroke, color: "#ef4444" }} onClick={() => settleDeleteConfirmation(true)}>
+                                        确认删除
+                                    </button>
                                 </div>
                             </div>
                         ) : null}
@@ -544,8 +539,8 @@ function AssistantMessages({ messages, onRetry }: { messages: CanvasAssistantMes
                                     message.role === "user"
                                         ? { background: theme.toolbar.activeBg, color: theme.toolbar.activeText }
                                         : message.status === "error"
-                                            ? { background: theme.node.fill, color: theme.node.text }
-                                            : { background: theme.node.fill, color: theme.node.text }
+                                          ? { background: theme.node.fill, color: theme.node.text }
+                                          : { background: theme.node.fill, color: theme.node.text }
                                 }
                             >
                                 {message.role === "assistant" ? (
@@ -605,7 +600,9 @@ function AssistantHistory({
 function MessageReferences({ message }: { message: CanvasAssistantMessage }) {
     return (
         <div className={cn("flex max-w-[88%] flex-wrap gap-2", message.role === "user" ? "justify-end" : "justify-start")}>
-            {message.references?.map((item) => <AssistantReferenceChip key={item.id} item={item} />)}
+            {message.references?.map((item) => (
+                <AssistantReferenceChip key={item.id} item={item} />
+            ))}
         </div>
     );
 }

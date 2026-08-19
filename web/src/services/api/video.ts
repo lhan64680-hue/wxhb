@@ -13,7 +13,32 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
-export type VideoResponse = { id: string; task_id?: string; video_id?: string; source_id?: string; sourceId?: string; channelId?: string; userChannelId?: string; channelName?: string; channel_id?: string; user_channel_id?: string; channel_name?: string; status?: string; video_url?: string; url?: string; progress?: number; error?: { message?: string }; size?: string; seconds?: string; model?: string; created_at?: string | number; createdAt?: string | number; started_at?: string | number; startedAt?: string | number; request_body?: string };
+export type VideoResponse = {
+    id: string;
+    task_id?: string;
+    video_id?: string;
+    source_id?: string;
+    sourceId?: string;
+    channelId?: string;
+    userChannelId?: string;
+    channelName?: string;
+    channel_id?: string;
+    user_channel_id?: string;
+    channel_name?: string;
+    status?: string;
+    video_url?: string;
+    url?: string;
+    progress?: number;
+    error?: { message?: string };
+    size?: string;
+    seconds?: string;
+    model?: string;
+    created_at?: string | number;
+    createdAt?: string | number;
+    started_at?: string | number;
+    startedAt?: string | number;
+    request_body?: string;
+};
 type ApiVideoEnvelope = { code: number; data?: VideoResponse | VideoResponse[] | null; msg?: string; message?: string };
 type ApiVideoResponse = VideoResponse | ApiVideoEnvelope;
 export type VideoGenerationResult = { id: string; url: string; durationMs: number; width: number; height: number; bytes: number; mimeType: string; task: VideoResponse };
@@ -108,7 +133,12 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     try {
         const createOptions = normalizeVideoTaskCreateOptions(options);
         const accountProxy = usesAccountProxy(config);
-        const headers = { ...aiHeaders(config), ...(accountProxy && createOptions.clientTaskId ? { "X-Client-Video-Task-ID": createOptions.clientTaskId } : {}), ...(accountProxy && createOptions.source ? { "X-Video-Task-Source": createOptions.source } : {}), ...(accountProxy && createOptions.sourceId ? { "X-Video-Task-Source-ID": createOptions.sourceId } : {}) };
+        const headers = {
+            ...aiHeaders(config),
+            ...(accountProxy && createOptions.clientTaskId ? { "X-Client-Video-Task-ID": createOptions.clientTaskId } : {}),
+            ...(accountProxy && createOptions.source ? { "X-Video-Task-Source": createOptions.source } : {}),
+            ...(accountProxy && createOptions.sourceId ? { "X-Video-Task-Source-ID": createOptions.sourceId } : {}),
+        };
         const created = unwrapVideoResponse((await axios.post<ApiVideoResponse>(aiApiUrl(config, "/videos"), body, { headers })).data);
         if (!created.id && !created.video_id) throw new Error("视频接口没有返回任务 ID");
         if (typeof created.progress === "number") onProgress?.(created.progress, created);
@@ -124,14 +154,18 @@ function normalizeVideoTaskCreateOptions(options?: string | VideoTaskCreateOptio
     return typeof options === "string" ? { clientTaskId: options } : options || {};
 }
 
-export async function pollCreatedVideoGenerationTask(config: AiConfig, task: VideoResponse, { startedAt = Date.now(), requestBody, initialDelayMs = 0, onProgress, onPoll }: { startedAt?: number; requestBody?: unknown; initialDelayMs?: number; onProgress?: VideoProgressHandler; onPoll?: (task: VideoResponse) => void } = {}) {
+export async function pollCreatedVideoGenerationTask(
+    config: AiConfig,
+    task: VideoResponse,
+    { startedAt = Date.now(), requestBody, initialDelayMs = 0, onProgress, onPoll }: { startedAt?: number; requestBody?: unknown; initialDelayMs?: number; onProgress?: VideoProgressHandler; onPoll?: (task: VideoResponse) => void } = {},
+) {
     const model = config.model || config.videoModel;
     const pollId = videoPollId(model, task);
     if (!pollId) throw new VideoRequestError("视频接口没有返回任务 ID", task);
     let completed: VideoResponse | null = null;
     try {
         if (initialDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, initialDelayMs));
-        for (; ;) {
+        for (;;) {
             const video = unwrapVideoResponse((await axios.get<ApiVideoResponse>(aiVideoPollUrl(config, model, pollId), { headers: aiHeaders(config), params: usesAccountProxy(config) ? { model } : undefined })).data);
             onPoll?.(video);
             if (isFailedVideoStatus(video.status)) throw new VideoRequestError(video.error?.message || "视频生成失败", video);
@@ -150,7 +184,17 @@ export async function pollCreatedVideoGenerationTask(config: AiConfig, task: Vid
         return result;
     } catch (error) {
         const { message, detail } = readAxiosError(error, "视频生成失败");
-        void writeVideoAICallLog(config, model, "/videos", "POST", startedAt, axios.isAxiosError(error) ? error.response?.status || 0 : 0, stringifyLogPayload(requestBody ? summarizeVideoRequestBody(requestBody) : { taskId: pollId }), stringifyLogPayload(detail), message);
+        void writeVideoAICallLog(
+            config,
+            model,
+            "/videos",
+            "POST",
+            startedAt,
+            axios.isAxiosError(error) ? error.response?.status || 0 : 0,
+            stringifyLogPayload(requestBody ? summarizeVideoRequestBody(requestBody) : { taskId: pollId }),
+            stringifyLogPayload(detail),
+            message,
+        );
         throw new VideoRequestError(message, detail);
     }
 }
@@ -297,7 +341,17 @@ function isMiniMaxH3LocalVideoConfig(config: AiConfig, model: string) {
     const key = modelKey(model);
     if (key !== "minimax-h3" && !key.startsWith("minimax-h3-")) return false;
     const channelText = videoChannelText(config, model);
-    return channelText.includes("local-minimax-h3") || channelText.includes("minimax h3") || channelText.includes("minimax-h3") || channelText.includes("127.0.0.1:7860") || channelText.includes("localhost:7860") || channelText.includes("127.0.0.1:30010") || channelText.includes("127.0.0.1:30011") || channelText.includes("localhost:30010") || channelText.includes("localhost:30011");
+    return (
+        channelText.includes("local-minimax-h3") ||
+        channelText.includes("minimax h3") ||
+        channelText.includes("minimax-h3") ||
+        channelText.includes("127.0.0.1:7860") ||
+        channelText.includes("localhost:7860") ||
+        channelText.includes("127.0.0.1:30010") ||
+        channelText.includes("127.0.0.1:30011") ||
+        channelText.includes("localhost:30010") ||
+        channelText.includes("localhost:30011")
+    );
 }
 
 function isMiniMaxH3ReferenceModel(model: string) {
@@ -341,7 +395,9 @@ function normalizeMiniMaxH3Seconds(value: string) {
 }
 
 function normalizeMiniMaxH3AspectRatio(value: string) {
-    const normalized = String(value || "").trim().toLowerCase();
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase();
     if (["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"].includes(normalized)) return normalized;
     const match = normalized.match(/^(\d+)x(\d+)$/);
     if (!match) return "16:9";
@@ -482,7 +538,9 @@ async function elementReferenceToInputUrl(reference: VideoElementReference) {
 }
 
 function normalizeKlingV26AspectRatio(value: string) {
-    const normalized = String(value || "").trim().toLowerCase();
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase();
     if (["9:16", "720x1280", "1080x1920"].includes(normalized)) return "9:16";
     if (["1:1", "1024x1024", "1080x1080"].includes(normalized)) return "1:1";
     return "16:9";
@@ -572,7 +630,7 @@ function normalizeVideoSecondsForModel(model: string, value: string) {
 }
 
 function closestAllowedSeconds(seconds: number, allowed: number[]) {
-    return String(allowed.reduce((best, item) => Math.abs(item - seconds) < Math.abs(best - seconds) ? item : best, allowed[0]));
+    return String(allowed.reduce((best, item) => (Math.abs(item - seconds) < Math.abs(best - seconds) ? item : best), allowed[0]));
 }
 
 function normalizeVideoSize(value: string) {
@@ -646,7 +704,7 @@ async function writeVideoAICallLog(config: AiConfig, model: string, endpoint: st
             responseBody,
             error,
         }),
-    }).catch(() => { });
+    }).catch(() => {});
 }
 
 function summarizeVideoRequestBody(value: unknown) {
@@ -685,7 +743,16 @@ function redactLogMedia(value: unknown) {
     const record = value as Record<string, unknown>;
     for (const key of Object.keys(record)) {
         const item = record[key];
-        if (typeof item === "string" && (item.startsWith("data:image/") || item.startsWith("data:video/") || item.startsWith("data:audio/") || item.includes("data:image/") || item.includes("data:video/") || item.includes("data:audio/") || item.length > 2048 && looksLikeBase64(item))) {
+        if (
+            typeof item === "string" &&
+            (item.startsWith("data:image/") ||
+                item.startsWith("data:video/") ||
+                item.startsWith("data:audio/") ||
+                item.includes("data:image/") ||
+                item.includes("data:video/") ||
+                item.includes("data:audio/") ||
+                (item.length > 2048 && looksLikeBase64(item)))
+        ) {
             record[key] = `[redacted media/string len=${item.length}]`;
             continue;
         }
@@ -712,7 +779,7 @@ function normalizeVideoResponse(value: unknown): VideoResponse {
         channelName: firstString(record.channelName, record.channel_name),
         status: firstString(record.status, record.state),
         video_url: firstString(record.video_url, record.videoUrl, record.remixed_from_video_id, record.output_url, record.download_url, firstVideoUrl(record)),
-        progress: typeof record.progress === "number" ? record.progress : (typeof record.progress === "string" ? parseFloat(record.progress) : undefined),
+        progress: typeof record.progress === "number" ? record.progress : typeof record.progress === "string" ? parseFloat(record.progress) : undefined,
     };
 }
 

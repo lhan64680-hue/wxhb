@@ -117,7 +117,15 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     <CanvasPromptLibrary onSelect={updatePrompt} />
                     {mode === "image" ? (
                         <>
-                            <ModelPicker className="!w-[180px] !min-w-0 !shrink-0" config={config} value={config.model} channelId={config.imageChannelId} onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })} capability="image" onMissingConfig={() => openConfigDialog(true)} />
+                            <ModelPicker
+                                className="!w-[180px] !min-w-0 !shrink-0"
+                                config={config}
+                                value={config.model}
+                                channelId={config.imageChannelId}
+                                onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })}
+                                capability="image"
+                                onMissingConfig={() => openConfigDialog(true)}
+                            />
                             <CanvasImageSettingsPopover
                                 config={config}
                                 placement="topLeft"
@@ -130,12 +138,38 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         </>
                     ) : mode === "video" ? (
                         <>
-                            <ModelPicker className="!w-[180px] !min-w-0 !shrink-0" config={config} value={config.model} channelId={config.videoChannelId} onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })} capability="video" onMissingConfig={() => openConfigDialog(true)} />
-                            <CanvasVideoSettingsPopover config={config} buttonClassName="!h-10 !w-[148px] !shrink-0 !justify-start !rounded-full !px-3" frameOptions={videoFrameOptions} resourceOptions={videoResourceOptions} metadata={node.metadata} firstFrameNodeId={node.metadata?.firstFrameNodeId} lastFrameNodeId={node.metadata?.lastFrameNodeId} onFrameChange={(patch) => onConfigChange(node.id, patch)} onMetadataChange={(patch) => onConfigChange(node.id, patch)} onConfigChange={(key, value) => onConfigChange(node.id, canvasVideoConfigPatch(key, value))} />
+                            <ModelPicker
+                                className="!w-[180px] !min-w-0 !shrink-0"
+                                config={config}
+                                value={config.model}
+                                channelId={config.videoChannelId}
+                                onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })}
+                                capability="video"
+                                onMissingConfig={() => openConfigDialog(true)}
+                            />
+                            <CanvasVideoSettingsPopover
+                                config={config}
+                                buttonClassName="!h-10 !w-[148px] !shrink-0 !justify-start !rounded-full !px-3"
+                                frameOptions={videoFrameOptions}
+                                resourceOptions={videoResourceOptions}
+                                metadata={node.metadata}
+                                firstFrameNodeId={node.metadata?.firstFrameNodeId}
+                                lastFrameNodeId={node.metadata?.lastFrameNodeId}
+                                onFrameChange={(patch) => onConfigChange(node.id, patch)}
+                                onMetadataChange={(patch) => onConfigChange(node.id, patch)}
+                                onConfigChange={(key, value) => onConfigChange(node.id, canvasVideoConfigPatch(key, value))}
+                            />
                         </>
                     ) : mode === "audio" ? (
                         <>
-                            <ModelPicker config={config} value={config.model} channelId={config.audioChannelId || config.activeChannelId} onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })} capability="audio" onMissingConfig={() => openConfigDialog(true)} />
+                            <ModelPicker
+                                config={config}
+                                value={config.model}
+                                channelId={config.audioChannelId || config.activeChannelId}
+                                onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })}
+                                capability="audio"
+                                onMissingConfig={() => openConfigDialog(true)}
+                            />
                             <CanvasAudioSettingsPopover config={config} buttonClassName="!h-10 !max-w-[170px] !justify-start !rounded-full !px-3" onConfigChange={(key, value) => onConfigChange(node.id, canvasAudioConfigPatch(key, value))} />
                         </>
                     ) : (
@@ -145,13 +179,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         <CanvasCameraControl value={node.metadata?.cameraControl} onChange={(cameraControl) => onConfigChange(node.id, { cameraControl })} buttonClassName="!h-10 !min-w-[92px] !justify-start !rounded-full !px-3" />
                     ) : null}
                 </div>
-                <Button
-                    type="primary"
-                    className="!h-10 !min-w-16 shrink-0 !rounded-full !px-3"
-                    disabled={isRunning || !canSubmit}
-                    onClick={submit}
-                    aria-label="生成"
-                >
+                <Button type="primary" className="!h-10 !min-w-16 shrink-0 !rounded-full !px-3" disabled={isRunning || !canSubmit} onClick={submit} aria-label="生成">
                     <span className="flex items-center gap-1.5">
                         <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
                             <CreditSymbol />

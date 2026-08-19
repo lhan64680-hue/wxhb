@@ -73,7 +73,17 @@ export default function CanvasPage() {
                     <div className="flex flex-wrap items-center justify-end gap-2">
                         {selectedIds.length ? (
                             <>
-                                <Button className="!border-white/15 !bg-white/5 !text-stone-200" disabled={!hydrated} icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects(projects.filter((project) => selectedIds.includes(project.id)), `无限画布-${selectedIds.length}个项目`)}>
+                                <Button
+                                    className="!border-white/15 !bg-white/5 !text-stone-200"
+                                    disabled={!hydrated}
+                                    icon={<Download className="size-4" />}
+                                    onClick={() =>
+                                        void exportCanvasProjects(
+                                            projects.filter((project) => selectedIds.includes(project.id)),
+                                            `无限画布-${selectedIds.length}个项目`,
+                                        )
+                                    }
+                                >
                                     导出选中
                                 </Button>
                                 <Button className="!border-white/15 !bg-white/5 !text-stone-200" disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>
@@ -118,14 +128,16 @@ export default function CanvasPage() {
                             <p className="hidden text-xs text-stone-500 sm:block">双击项目名称可以重命名</p>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {projects.map((project) => (
-                            <CanvasProjectCard key={project.id} project={project} />
-                        ))}
+                            {projects.map((project) => (
+                                <CanvasProjectCard key={project.id} project={project} />
+                            ))}
                         </div>
                     </section>
                 ) : (
                     <section className="flex min-h-[300px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[.025] px-6 text-center">
-                        <span className="grid size-12 place-items-center rounded-2xl bg-white/10 text-cyan-200"><Plus className="size-6" /></span>
+                        <span className="grid size-12 place-items-center rounded-2xl bg-white/10 text-cyan-200">
+                            <Plus className="size-6" />
+                        </span>
                         <h2 className="mt-5 text-xl font-medium">创建第一个项目</h2>
                         <p className="mt-3 max-w-md text-sm leading-6 text-stone-500">项目会在本机自动保存。进入画布后，直接双击空白处即可添加第一个创作节点。</p>
                         <Button type="primary" className="mt-6 !border-0 !bg-cyan-300 !font-medium !text-stone-950 hover:!bg-cyan-200" icon={<Plus className="size-4" />} onClick={createAndEnter}>

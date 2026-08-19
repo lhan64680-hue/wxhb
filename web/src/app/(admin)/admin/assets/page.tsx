@@ -222,7 +222,11 @@ export default function AdminAssetsPage() {
                         <Input.TextArea rows={3} />
                     </Form.Item>
                     {formType === "image" || formType === "video" || formType === "audio" ? (
-                        <Form.Item name="url" label={formType === "image" ? "图片 URL" : formType === "video" ? "视频 URL" : "音频 URL"} rules={[{ required: true, message: formType === "image" ? "请输入图片 URL" : formType === "video" ? "请输入视频 URL" : "请输入音频 URL" }]}>
+                        <Form.Item
+                            name="url"
+                            label={formType === "image" ? "图片 URL" : formType === "video" ? "视频 URL" : "音频 URL"}
+                            rules={[{ required: true, message: formType === "image" ? "请输入图片 URL" : formType === "video" ? "请输入视频 URL" : "请输入音频 URL" }]}
+                        >
                             <Input />
                         </Form.Item>
                     ) : (

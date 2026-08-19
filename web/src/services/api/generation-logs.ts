@@ -27,5 +27,3 @@ export async function saveImageGenerationLogs<T>(token: string, logs: T[]) {
 export async function deleteImageGenerationLogs(token: string, ids: string[]) {
     return apiPost<{ deleted: boolean }>("/api/v1/generation-logs/images/delete", { ids }, token);
 }
-
-

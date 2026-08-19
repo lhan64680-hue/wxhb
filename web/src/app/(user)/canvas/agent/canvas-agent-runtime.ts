@@ -1,24 +1,9 @@
 import { requestCanvasAgentTurn } from "@/services/api/canvas-agent";
 import type { AiConfig } from "@/stores/use-config-store";
-import type {
-    CanvasAgentContent,
-    CanvasAgentProtocolMessage,
-    CanvasAgentState,
-    CanvasAssistantMessageStatus,
-    CanvasAssistantReference,
-} from "../types";
+import type { CanvasAgentContent, CanvasAgentProtocolMessage, CanvasAgentState, CanvasAssistantMessageStatus, CanvasAssistantReference } from "../types";
 import type { CanvasAgentContext } from "./canvas-agent-context";
 import { buildCanvasAgentSkillPrompt } from "./canvas-agent-skills";
-import {
-    CANVAS_AGENT_TOOLS,
-    canvasAgentActionLabel,
-    isCanvasAgentMediaAction,
-    normalizeCanvasAgentAction,
-    parseCanvasAgentJson,
-    userLikelyRequestedCanvasAction,
-    type CanvasAgentAction,
-    type CanvasAgentToolResult,
-} from "./canvas-agent-tools";
+import { CANVAS_AGENT_TOOLS, canvasAgentActionLabel, isCanvasAgentMediaAction, normalizeCanvasAgentAction, parseCanvasAgentJson, userLikelyRequestedCanvasAction, type CanvasAgentAction, type CanvasAgentToolResult } from "./canvas-agent-tools";
 
 const MAX_AGENT_STEPS = 12;
 const MAX_PROTOCOL_MESSAGES = 120;
@@ -67,10 +52,7 @@ export async function runCanvasAgent(input: RunCanvasAgentInput): Promise<RunCan
     let state = input.initialState;
     let allowTools = true;
     let hasExecutedActions = false;
-    let protocolMessages: CanvasAgentProtocolMessage[] = trimProtocolMessages([
-        ...input.protocolMessages,
-        { role: "user" as const, content: buildUserContent(input.userText, input.references, input.config.textModel || input.config.model) },
-    ]);
+    let protocolMessages: CanvasAgentProtocolMessage[] = trimProtocolMessages([...input.protocolMessages, { role: "user" as const, content: buildUserContent(input.userText, input.references, input.config.textModel || input.config.model) }]);
 
     for (let step = 0; step < MAX_AGENT_STEPS; step++) {
         throwIfAborted(input.signal);
@@ -141,13 +123,7 @@ export async function runCanvasAgent(input: RunCanvasAgentInput): Promise<RunCan
     return { reply, state, protocolMessages: persistCanvasAgentProtocolMessages(protocolMessages) };
 }
 
-async function executeActions(
-    actions: CanvasAgentAction[],
-    initialState: CanvasAgentState,
-    executeAction: (action: CanvasAgentAction) => Promise<CanvasAgentToolResult>,
-    signal?: AbortSignal,
-    onEvent?: (event: CanvasAgentRuntimeEvent) => void,
-) {
+async function executeActions(actions: CanvasAgentAction[], initialState: CanvasAgentState, executeAction: (action: CanvasAgentAction) => Promise<CanvasAgentToolResult>, signal?: AbortSignal, onEvent?: (event: CanvasAgentRuntimeEvent) => void) {
     let state = initialState;
     const executeOne = async (action: CanvasAgentAction) => {
         throwIfAborted(signal);
@@ -171,10 +147,7 @@ async function executeActions(
 
     const items = actions.every(isCanvasAgentMediaAction)
         ? await Promise.all(actions.map(executeOne))
-        : await actions.reduce<Promise<Array<{ action: CanvasAgentAction; result: CanvasAgentToolResult }>>>(
-            async (pending, action) => [...(await pending), await executeOne(action)],
-            Promise.resolve([]),
-        );
+        : await actions.reduce<Promise<Array<{ action: CanvasAgentAction; result: CanvasAgentToolResult }>>>(async (pending, action) => [...(await pending), await executeOne(action)], Promise.resolve([]));
     return { items, state };
 }
 
@@ -182,9 +155,9 @@ function buildUserContent(text: string, references: CanvasAssistantReference[], 
     const referenceText = references.length ? "\n\n本次明确引用的真实节点：" + references.map((item) => item.id + "（" + item.title + "）").join("、") : "";
     const images = supportsCanvasAgentImageInput(modelName)
         ? references.flatMap((item) => {
-            const url = item.dataUrl;
-            return url && (/^data:image\//.test(url) || /^https?:\/\//.test(url)) ? [{ type: "image_url" as const, image_url: { url } }] : [];
-        })
+              const url = item.dataUrl;
+              return url && (/^data:image\//.test(url) || /^https?:\/\//.test(url)) ? [{ type: "image_url" as const, image_url: { url } }] : [];
+          })
         : [];
     if (!images.length) return text + referenceText;
     return [{ type: "text", text: text + referenceText }, ...images];

@@ -28,17 +28,13 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     };
 
     return (
-        <article className="group relative flex min-h-48 cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-white/[.035] p-5 text-stone-100 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-200/35 hover:bg-white/[.07]" onClick={() => !editing && open()}>
+        <article
+            className="group relative flex min-h-48 cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-white/[.035] p-5 text-stone-100 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-200/35 hover:bg-white/[.07]"
+            onClick={() => !editing && open()}
+        >
             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_15%_0%,rgba(34,211,238,.2),transparent_60%)] opacity-0 transition group-hover:opacity-100" />
             <div className="flex items-start gap-3">
-                <input
-                    type="checkbox"
-                    checked={selected}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) => toggleSelected(project.id, event.target.checked)}
-                    className="mt-1 size-4 accent-cyan-300"
-                    aria-label={`选择 ${project.title}`}
-                />
+                <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => toggleSelected(project.id, event.target.checked)} className="mt-1 size-4 accent-cyan-300" aria-label={`选择 ${project.title}`} />
                 {editing ? (
                     <Input className="min-w-0" value={editingTitle} onClick={(event) => event.stopPropagation()} onChange={(event) => setEditingTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveTitle()} autoFocus />
                 ) : (

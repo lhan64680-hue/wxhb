@@ -304,44 +304,59 @@ function isVideoModelName(model: string) {
 
 function isImageModelName(model: string) {
     const value = model.toLowerCase();
-    return !isVideoModelName(model) && !isAudioModelName(model) && (
-        value.includes("image") ||
-        value.includes("nano-banana") ||
-        value.includes("seedream") ||
-        value.includes("gpt-image") ||
-        value.includes("dall-e") ||
-        value.includes("dalle") ||
-        value.includes("imagen") ||
-        value.includes("gemini-2.5-flash") ||
-        value.includes("gemini-3-pro") ||
-        value.includes("gemini-3.1-flash") ||
-        value.includes("flux") ||
-        value.includes("kontext") ||
-        value.includes("4o-image") ||
-        value.includes("4o image") ||
-        value.includes("gpt-4o-image") ||
-        value.includes("z-image") ||
-        value.includes("qwen/image") ||
-        value.includes("qwen2/image") ||
-        value.includes("qwen/text-to-image") ||
-        value.includes("qwen2/text-to-image") ||
-        value.includes("ideogram") ||
-        value.includes("recraft") ||
-        value.includes("sdxl") ||
-        value.includes("stable-diffusion") ||
-        value.includes("midjourney") ||
-        value.includes("wan2-7-image") ||
-        value.includes("wan2.7-image") ||
-        value.includes("wan/2-7-image") ||
-        value.includes("topaz/image") ||
-        value.includes("gemini-omni-character") ||
-        (value.includes("grok-imagine") && !value.includes("video"))
+    return (
+        !isVideoModelName(model) &&
+        !isAudioModelName(model) &&
+        (value.includes("image") ||
+            value.includes("nano-banana") ||
+            value.includes("seedream") ||
+            value.includes("gpt-image") ||
+            value.includes("dall-e") ||
+            value.includes("dalle") ||
+            value.includes("imagen") ||
+            value.includes("gemini-2.5-flash") ||
+            value.includes("gemini-3-pro") ||
+            value.includes("gemini-3.1-flash") ||
+            value.includes("flux") ||
+            value.includes("kontext") ||
+            value.includes("4o-image") ||
+            value.includes("4o image") ||
+            value.includes("gpt-4o-image") ||
+            value.includes("z-image") ||
+            value.includes("qwen/image") ||
+            value.includes("qwen2/image") ||
+            value.includes("qwen/text-to-image") ||
+            value.includes("qwen2/text-to-image") ||
+            value.includes("ideogram") ||
+            value.includes("recraft") ||
+            value.includes("sdxl") ||
+            value.includes("stable-diffusion") ||
+            value.includes("midjourney") ||
+            value.includes("wan2-7-image") ||
+            value.includes("wan2.7-image") ||
+            value.includes("wan/2-7-image") ||
+            value.includes("topaz/image") ||
+            value.includes("gemini-omni-character") ||
+            (value.includes("grok-imagine") && !value.includes("video")))
     );
 }
 
 function isAudioModelName(model: string) {
     const value = model.toLowerCase();
-    return value.includes("audio") || value.includes("tts") || value.includes("speech") || value.includes("voice") || value.includes("music") || value.includes("sound") || value.includes("elevenlabs") || value.includes("suno") || value.includes("lyrics") || value.includes("vocal") || value.includes("midi") || value.includes("wav");
+    return (
+        value.includes("audio") ||
+        value.includes("tts") ||
+        value.includes("speech") ||
+        value.includes("voice") ||
+        value.includes("music") ||
+        value.includes("sound") ||
+        value.includes("elevenlabs") ||
+        value.includes("suno") ||
+        value.includes("lyrics") ||
+        value.includes("vocal") ||
+        value.includes("midi") ||
+        value.includes("wav")
+    );
 }
 
 function isTextModelName(model: string) {
@@ -512,19 +527,21 @@ function normalizeArkPlanBaseUrl(baseUrl: string) {
 
 export function normalizeLocalChannels(config: Partial<AiConfig>) {
     const channels = Array.isArray(config.localChannels) ? config.localChannels : [];
-    const normalized = channels.map((channel, index) => upgradeMinimaxH3LocalChannel({
-        id: channel.id || `local-${index + 1}`,
-        name: typeof channel.name === "string" ? channel.name : `本地渠道 ${index + 1}`,
-        baseUrl: channel.baseUrl || "",
-        apiKey: channel.apiKey || "",
-        models: Array.isArray(channel.models) ? channel.models.filter(Boolean) : [],
-    }));
+    const normalized = channels.map((channel, index) =>
+        upgradeMinimaxH3LocalChannel({
+            id: channel.id || `local-${index + 1}`,
+            name: typeof channel.name === "string" ? channel.name : `本地渠道 ${index + 1}`,
+            baseUrl: channel.baseUrl || "",
+            apiKey: channel.apiKey || "",
+            models: Array.isArray(channel.models) ? channel.models.filter(Boolean) : [],
+        }),
+    );
     if (!normalized.length) return defaultLocalChannels();
     return ensureKimiK3Channel(normalized);
 }
 
 function ensureGrsaiGptImage2Channel(channels: LocalModelChannel[]) {
-    const migrated = channels.map((channel) => channel.id === LEGACY_OPENAI_GPT_IMAGE_2_CHANNEL_ID && !channel.apiKey.trim() ? defaultGrsaiGptImage2Channel() : channel);
+    const migrated = channels.map((channel) => (channel.id === LEGACY_OPENAI_GPT_IMAGE_2_CHANNEL_ID && !channel.apiKey.trim() ? defaultGrsaiGptImage2Channel() : channel));
     if (migrated.some((channel) => channel.id === GRSAI_GPT_IMAGE_2_CHANNEL_ID)) return migrated;
     return [...migrated, defaultGrsaiGptImage2Channel()];
 }
@@ -568,9 +585,7 @@ export function channelIdForActiveModel(config: AiConfig) {
 }
 
 export function resolveModelChannelId(config: AiConfig, model: string, ...preferredIds: Array<string | undefined>) {
-    const channels = config.channelMode === "remote"
-        ? config.publicChannels.map((channel) => ({ id: channel.id || "", models: channel.models || [] }))
-        : normalizeLocalChannels(config).map((channel) => ({ id: channel.id, models: channel.models }));
+    const channels = config.channelMode === "remote" ? config.publicChannels.map((channel) => ({ id: channel.id || "", models: channel.models || [] })) : normalizeLocalChannels(config).map((channel) => ({ id: channel.id, models: channel.models }));
     for (const id of preferredIds) {
         const channelId = (id || "").trim();
         if (channelId && channels.some((channel) => channel.id === channelId && channel.models.includes(model))) return channelId;
@@ -587,4 +602,3 @@ export function localChannelForActiveModel(config: AiConfig) {
     const preferredId = channelIdForActiveModel(config);
     return channels.find((channel) => channel.id === preferredId && channel.models.includes(config.model)) || channels.find((channel) => channel.models.includes(config.model)) || channels.find((channel) => channel.id === preferredId) || channels[0];
 }
-

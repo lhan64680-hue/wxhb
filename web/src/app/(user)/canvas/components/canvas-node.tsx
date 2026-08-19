@@ -303,11 +303,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
-            <div
-                className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]"
-                onMouseDown={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-            >
+            <div className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                 {isEditingTitle ? (
                     <input
                         ref={titleInputRef}
@@ -350,8 +346,16 @@ export const CanvasNode = React.memo(function CanvasNode({
                 className={`relative h-full w-full overflow-visible border ${isGroup ? "rounded-xl" : "rounded-3xl border-2"}`}
                 style={{
                     background: isGroup ? theme.node.panel : hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
-                    borderColor: isGroup ? isGroupDropTarget || isActive ? selectionBlue : theme.node.stroke : hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
-                    boxShadow: isGroupDropTarget ? `0 0 0 2px ${selectionBlue}66` : isGroup && isSelected ? `0 0 0 1px ${selectionBlue}55` : isActive ? `0 0 0 1px ${selectionBlue}55` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
+                    borderColor: isGroup ? (isGroupDropTarget || isActive ? selectionBlue : theme.node.stroke) : hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
+                    boxShadow: isGroupDropTarget
+                        ? `0 0 0 2px ${selectionBlue}66`
+                        : isGroup && isSelected
+                          ? `0 0 0 1px ${selectionBlue}55`
+                          : isActive
+                            ? `0 0 0 1px ${selectionBlue}55`
+                            : isRelated && !isBatchChild
+                              ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)`
+                              : undefined,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
@@ -412,7 +416,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                 {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
                 {!isGroup && resourceLabel ? <ResourceLabelBadge reference={resourceLabel} /> : null}
 
-                {!isGroup && !hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
+                {!isGroup && !hasImageContent && !hasVideoContent && !hasAudioContent ? (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} />
+                ) : null}
 
                 <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
                 <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
@@ -427,7 +433,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                 </>
             ) : null}
 
-            {showPanel && !isGroup && renderPanel ? <div className={"absolute left-1/2 top-full z-[70] max-w-[calc(100vw-24px)] -translate-x-1/2 pt-4 " + (data.type === CanvasNodeType.Image || data.type === CanvasNodeType.Video ? "w-[580px]" : "w-[500px]")}>{renderPanel(data)}</div> : null}
+            {showPanel && !isGroup && renderPanel ? (
+                <div className={"absolute left-1/2 top-full z-[70] max-w-[calc(100vw-24px)] -translate-x-1/2 pt-4 " + (data.type === CanvasNodeType.Image || data.type === CanvasNodeType.Video ? "w-[580px]" : "w-[500px]")}>{renderPanel(data)}</div>
+            ) : null}
         </div>
     );
 });
@@ -576,11 +584,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     onWheel={(event) => event.stopPropagation()}
                 />
             ) : (
-                <div
-                    className="thin-scrollbar block h-full w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent pl-4 pr-14 pt-0 pb-4 font-mono"
-                    style={textStyle}
-                    onWheel={(event) => event.stopPropagation()}
-                >
+                <div className="thin-scrollbar block h-full w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent pl-4 pr-14 pt-0 pb-4 font-mono" style={textStyle} onWheel={(event) => event.stopPropagation()}>
                     {node.metadata?.content || (node.metadata?.textCreativeMode ? <TextCreativeEmptyState theme={theme} /> : <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>)}
                 </div>
             )}
@@ -608,11 +612,7 @@ function TextCreativeEmptyState({ theme }: { theme: (typeof canvasThemes)[keyof 
 }
 
 function ResourceLabelBadge({ reference }: { reference: CanvasResourceReference }) {
-    return (
-        <span className={`pointer-events-none absolute right-2 top-2 z-30 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${reference.active ? "bg-[#2f80ff] text-white shadow-sm" : "bg-black/35 text-white/75"}`}>
-            {reference.label}
-        </span>
-    );
+    return <span className={`pointer-events-none absolute right-2 top-2 z-30 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${reference.active ? "bg-[#2f80ff] text-white shadow-sm" : "bg-black/35 text-white/75"}`}>{reference.label}</span>;
 }
 
 function ImageNodeContent(props: NodeContentRendererProps) {
@@ -662,7 +662,16 @@ function PanoramaNodeContent(props: NodeContentRendererProps) {
             batchRecovering={props.batchRecovering}
             onToggleBatch={props.onToggleBatch}
             onSetBatchPrimary={props.onSetBatchPrimary}
-            media={<CanvasPanoramaViewer src={src} alt={props.node.title} proxyGeneratedPanorama={proxyGeneratedPanorama} expandOnDoubleClick={!props.isBatchRoot} onMoveStart={props.onMoveStart} onOpen={props.onViewImage ? () => props.onViewImage?.(props.node) : undefined} />}
+            media={
+                <CanvasPanoramaViewer
+                    src={src}
+                    alt={props.node.title}
+                    proxyGeneratedPanorama={proxyGeneratedPanorama}
+                    expandOnDoubleClick={!props.isBatchRoot}
+                    onMoveStart={props.onMoveStart}
+                    onOpen={props.onViewImage ? () => props.onViewImage?.(props.node) : undefined}
+                />
+            }
         />
     );
 }
@@ -814,9 +823,9 @@ function BatchFrame({ batchCount, batchExpanded, batchOpening, batchRecovering, 
             onDoubleClick={
                 isBatchRoot
                     ? (event) => {
-                        event.stopPropagation();
-                        onToggleBatch?.();
-                    }
+                          event.stopPropagation();
+                          onToggleBatch?.();
+                      }
                     : undefined
             }
         >
@@ -859,8 +868,9 @@ function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "r
 
     return (
         <div
-            className={`absolute top-1/2 z-30 flex size-12 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150 ${side === "left" ? "-left-6" : "-right-6"
-                } ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+            className={`absolute top-1/2 z-30 flex size-12 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150 ${
+                side === "left" ? "-left-6" : "-right-6"
+            } ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
             onMouseDown={onMouseDown}
         >
             <div className="size-3 rounded-full border-2 transition-all hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.muted }} />

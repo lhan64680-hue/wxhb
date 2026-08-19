@@ -7,7 +7,9 @@ export function ReferenceThumbnailOverlay({ references, className = "" }: { refe
     if (!visibleReferences.length) return null;
     return (
         <div className={`absolute z-10 flex items-center gap-1 rounded-md bg-black/55 p-1 shadow-sm backdrop-blur ${className}`}>
-            {visibleReferences.map((item) => <img key={item.id} src={item.dataUrl} alt={item.name} className="size-7 rounded border border-white/60 object-cover" />)}
+            {visibleReferences.map((item) => (
+                <img key={item.id} src={item.dataUrl} alt={item.name} className="size-7 rounded border border-white/60 object-cover" />
+            ))}
             {(references || []).length > visibleReferences.length ? <span className="px-1 text-[10px] text-white">+{(references || []).length - visibleReferences.length}</span> : null}
         </div>
     );

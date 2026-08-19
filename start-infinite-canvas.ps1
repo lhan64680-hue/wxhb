@@ -7,7 +7,7 @@ $webRoot = Join-Path $appRoot "web"
 $runtimeRoot = Join-Path $appRoot ".runtime"
 $goExe = "E:\codex\tools\go\bin\go.exe"
 $serverExe = Join-Path $runtimeRoot "infinite-canvas-server.exe"
-$h3Root = "C:\Users\hc\Documents\Codex\2026-08-07\web-comfyui\work"
+$h3Root = Join-Path $runtimeRoot "h3-runtime\work"
 $h3EngineApp = Join-Path $h3Root "ComfyUI\main.py"
 $h3SagePython = Join-Path $runtimeRoot "h3-sage-cu128\Scripts\python.exe"
 $h3AdapterApp = Join-Path $h3Root "webui\app.py"
@@ -83,8 +83,8 @@ Remove-Item -LiteralPath Env:\PATH -ErrorAction SilentlyContinue
 if (-not [string]::IsNullOrWhiteSpace($pathValue)) {
     [Environment]::SetEnvironmentVariable("Path", $pathValue, "Process")
 }
-$env:GOMODCACHE = "E:\codex\.go-mod-cache"
-$env:GOCACHE = "E:\codex\.go-build-cache"
+$env:GOMODCACHE = Join-Path $runtimeRoot "go-mod-cache"
+$env:GOCACHE = Join-Path $runtimeRoot "go-build-cache"
 
 if (-not (Test-ListeningPort 8188)) {
     if ((Test-Path -LiteralPath $h3EngineApp) -and (Test-H3SageRuntime)) {

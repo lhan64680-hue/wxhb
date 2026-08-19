@@ -164,17 +164,7 @@ export type CanvasAssistantImage = {
     source?: "asset" | "library";
 };
 
-export type CanvasAgentPhase =
-    | "intake"
-    | "concept"
-    | "script"
-    | "breakdown"
-    | "references"
-    | "storyboard"
-    | "video"
-    | "audio"
-    | "review"
-    | "complete";
+export type CanvasAgentPhase = "intake" | "concept" | "script" | "breakdown" | "references" | "storyboard" | "video" | "audio" | "review" | "complete";
 
 export type CanvasAgentConfig = {
     imageQuality: string;
@@ -194,12 +184,7 @@ export type CanvasAgentState = {
     completedTaskIds: string[];
 };
 
-export type CanvasAgentContent =
-    | string
-    | Array<
-        | { type: "text"; text: string }
-        | { type: "image_url"; image_url: { url: string } }
-    >;
+export type CanvasAgentContent = string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
 
 export type CanvasAgentToolCall = {
     id: string;
@@ -207,10 +192,7 @@ export type CanvasAgentToolCall = {
     arguments: Record<string, unknown>;
 };
 
-export type CanvasAgentProtocolMessage =
-    | { role: "user" | "system"; content: CanvasAgentContent }
-    | { role: "assistant"; content?: string; toolCalls?: CanvasAgentToolCall[] }
-    | { role: "tool"; content: string; toolCallId: string; name: string };
+export type CanvasAgentProtocolMessage = { role: "user" | "system"; content: CanvasAgentContent } | { role: "assistant"; content?: string; toolCalls?: CanvasAgentToolCall[] } | { role: "tool"; content: string; toolCallId: string; name: string };
 
 export type CanvasAssistantMessageStatus = "thinking" | "running" | "waiting" | "success" | "error";
 
@@ -250,14 +232,14 @@ export type SelectionBox = {
 
 export type ContextMenuState =
     | {
-        type: "node";
-        x: number;
-        y: number;
-        nodeId: string;
-    }
+          type: "node";
+          x: number;
+          y: number;
+          nodeId: string;
+      }
     | {
-        type: "connection";
-        x: number;
-        y: number;
-        connectionId: string;
-    };
+          type: "connection";
+          x: number;
+          y: number;
+          connectionId: string;
+      };

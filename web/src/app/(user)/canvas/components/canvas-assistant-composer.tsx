@@ -27,20 +27,7 @@ export type CanvasAssistantComposerProps = {
     onPasteImage: (file: File) => void;
 };
 
-export function CanvasAssistantComposer({
-    prompt,
-    isRunning,
-    references,
-    agentConfig,
-    onAgentConfigChange,
-    onPromptChange,
-    onSubmit,
-    onStop,
-    onOpenUpload,
-    onOpenAssets,
-    onRemoveReference,
-    onPasteImage,
-}: CanvasAssistantComposerProps) {
+export function CanvasAssistantComposer({ prompt, isRunning, references, agentConfig, onAgentConfigChange, onPromptChange, onSubmit, onStop, onOpenUpload, onOpenAssets, onRemoveReference, onPasteImage }: CanvasAssistantComposerProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const effectiveConfig = useEffectiveConfig();
     const imageConfig = useMemo(() => ({ ...effectiveConfig, quality: agentConfig.imageQuality, size: agentConfig.imageSize }), [agentConfig.imageQuality, agentConfig.imageSize, effectiveConfig]);

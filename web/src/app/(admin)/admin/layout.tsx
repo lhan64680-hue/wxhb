@@ -37,11 +37,21 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             : pathname.startsWith("/admin/ai-logs")
               ? "/admin/ai-logs"
               : pathname.startsWith("/admin/credit-logs")
-              ? "/admin/credit-logs"
-              : pathname.startsWith("/admin/users")
-                ? "/admin/users"
-                : "";
-    const pageTitle = pathname.startsWith("/admin/settings") ? "系统设置" : pathname.startsWith("/admin/assets") ? "素材库管理" : pathname.startsWith("/admin/prompts") ? "提示词管理" : pathname.startsWith("/admin/ai-logs") ? "AI 日志" : pathname.startsWith("/admin/credit-logs") ? "算力点日志" : "用户管理";
+                ? "/admin/credit-logs"
+                : pathname.startsWith("/admin/users")
+                  ? "/admin/users"
+                  : "";
+    const pageTitle = pathname.startsWith("/admin/settings")
+        ? "系统设置"
+        : pathname.startsWith("/admin/assets")
+          ? "素材库管理"
+          : pathname.startsWith("/admin/prompts")
+            ? "提示词管理"
+            : pathname.startsWith("/admin/ai-logs")
+              ? "AI 日志"
+              : pathname.startsWith("/admin/credit-logs")
+                ? "算力点日志"
+                : "用户管理";
 
     useEffect(() => {
         if (!isReady) return;

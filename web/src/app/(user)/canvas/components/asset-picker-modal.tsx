@@ -216,10 +216,32 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
         } else {
             onInsert(
                 asset.kind === "video"
-                    ? { kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, assetId: asset.id, width: asset.data.width, height: asset.data.height, bytes: asset.data.bytes, mimeType: asset.data.mimeType, source: "asset" }
+                    ? {
+                          kind: "video",
+                          url: asset.data.url,
+                          storageKey: asset.data.storageKey,
+                          title: asset.title,
+                          assetId: asset.id,
+                          width: asset.data.width,
+                          height: asset.data.height,
+                          bytes: asset.data.bytes,
+                          mimeType: asset.data.mimeType,
+                          source: "asset",
+                      }
                     : asset.kind === "audio"
                       ? { kind: "audio", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, assetId: asset.id, bytes: asset.data.bytes, mimeType: asset.data.mimeType, durationMs: asset.data.durationMs, source: "asset" }
-                      : { kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title, assetId: asset.id, width: asset.data.width, height: asset.data.height, bytes: asset.data.bytes, mimeType: asset.data.mimeType, source: "asset" },
+                      : {
+                            kind: "image",
+                            dataUrl: asset.data.dataUrl,
+                            storageKey: asset.data.storageKey,
+                            title: asset.title,
+                            assetId: asset.id,
+                            width: asset.data.width,
+                            height: asset.data.height,
+                            bytes: asset.data.bytes,
+                            mimeType: asset.data.mimeType,
+                            source: "asset",
+                        },
             );
         }
     };
@@ -259,7 +281,9 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                     coverUrl: stored?.url || createUrl.trim(),
                     tags: [],
                     source: "素材选择器",
-                    data: stored ? { dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType } : { dataUrl: createUrl.trim(), width: 0, height: 0, bytes: 0, mimeType: "image/*" },
+                    data: stored
+                        ? { dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType }
+                        : { dataUrl: createUrl.trim(), width: 0, height: 0, bytes: 0, mimeType: "image/*" },
                 });
             } else if (createKind === "video") {
                 if (!selectedFile && !createUrl.trim()) {
@@ -382,7 +406,13 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                         <Input.TextArea value={createText} autoSize={{ minRows: 5, maxRows: 10 }} placeholder="文本内容" onChange={(event) => setCreateText(event.target.value)} />
                     ) : (
                         <div className="space-y-2">
-                            <input ref={fileInputRef} type="file" accept={createKind === "image" ? "image/*" : createKind === "video" ? "video/*" : "audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav"} className="hidden" onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} />
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept={createKind === "image" ? "image/*" : createKind === "video" ? "video/*" : "audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav"}
+                                className="hidden"
+                                onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+                            />
                             <Button icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()}>
                                 {selectedFile ? selectedFile.name : createKind === "image" ? "选择图片" : createKind === "video" ? "选择视频" : "选择音频"}
                             </Button>

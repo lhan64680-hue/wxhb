@@ -7,7 +7,17 @@ import { ModelPicker } from "@/components/model-picker";
 import { fetchImageModels } from "@/services/api/image";
 import { fetchUserConfig, measureUserStorageProvider, syncUserModelConfig, syncUserStorageProvider } from "@/services/api/user-config";
 import { clearStorageConfigCache as clearFileStorageCache } from "@/services/file-storage";
-import { clearStorageConfigCache as clearImageStorageCache, defaultUserStorageProvider, defaultUserWebDAVStorageProvider, loadStorageConfig, loadUserS3StorageProvider, loadUserWebDAVStorageProvider, saveUserStorageProvider, saveUserWebDAVStorageProvider, type UserStorageProvider } from "@/services/image-storage";
+import {
+    clearStorageConfigCache as clearImageStorageCache,
+    defaultUserStorageProvider,
+    defaultUserWebDAVStorageProvider,
+    loadStorageConfig,
+    loadUserS3StorageProvider,
+    loadUserWebDAVStorageProvider,
+    saveUserStorageProvider,
+    saveUserWebDAVStorageProvider,
+    type UserStorageProvider,
+} from "@/services/image-storage";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import { filterModelsByCapability, GRSAI_GPT_IMAGE_2_CHANNEL_ID, KIMI_K3_CHANNEL_ID, normalizeLocalChannels, useConfigStore, useEffectiveConfig, type AiConfig, type LocalModelChannel, type ModelCapability } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -73,8 +83,7 @@ export function AppConfigModal() {
                 setRemoteStorageSyncEnabled(syncS3);
                 setRemoteWebDAVStorageSyncEnabled(syncWebDAV);
                 if (remoteConfig) {
-                    Object.entries(remoteConfig)
-                        .forEach(([key, value]) => updateConfig(key as keyof AiConfig, value as never));
+                    Object.entries(remoteConfig).forEach(([key, value]) => updateConfig(key as keyof AiConfig, value as never));
                 }
                 updateConfig("syncStorageConfig", syncS3);
                 updateConfig("syncWebDAVStorageConfig", syncWebDAV);
@@ -89,7 +98,7 @@ export function AppConfigModal() {
                     saveUserWebDAVStorageProvider(next);
                 }
             })
-            .catch(() => { });
+            .catch(() => {});
         return () => {
             canceled = true;
         };
@@ -228,7 +237,6 @@ export function AppConfigModal() {
         }
     };
 
-
     const measureStorage = async (provider: UserStorageProvider) => {
         if (!token) {
             message.warning("请先登录后再统计容量");
@@ -327,8 +335,8 @@ export function AppConfigModal() {
                                             {channel.id === GRSAI_GPT_IMAGE_2_CHANNEL_ID
                                                 ? "填写 GRS AI API Key 后即可通过国内节点使用图片生成。"
                                                 : channel.id === KIMI_K3_CHANNEL_ID
-                                                    ? "填写 Moonshot API Key 后，文本节点会由本机后端直连 Kimi K3；可理解文字、图片和视频参考。"
-                                                    : `已保存 ${channel.models.length} 个模型`}
+                                                  ? "填写 Moonshot API Key 后，文本节点会由本机后端直连 Kimi K3；可理解文字、图片和视频参考。"
+                                                  : `已保存 ${channel.models.length} 个模型`}
                                         </div>
                                     </div>
                                 ))}
@@ -354,7 +362,17 @@ export function AppConfigModal() {
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         {modelGroups.map((group) => (
                             <Form.Item key={group.modelKey} label={group.defaultLabel} className="mb-4">
-                                <ModelPicker config={modelConfig} value={modelConfig[group.modelKey]} channelId={modelConfig[group.channelKey]} onChange={(model, channelId) => { updateConfig(group.modelKey, model); if (channelId) updateConfig(group.channelKey, channelId); }} capability={group.capability} fullWidth />
+                                <ModelPicker
+                                    config={modelConfig}
+                                    value={modelConfig[group.modelKey]}
+                                    channelId={modelConfig[group.channelKey]}
+                                    onChange={(model, channelId) => {
+                                        updateConfig(group.modelKey, model);
+                                        if (channelId) updateConfig(group.channelKey, channelId);
+                                    }}
+                                    capability={group.capability}
+                                    fullWidth
+                                />
                             </Form.Item>
                         ))}
                     </div>
@@ -389,7 +407,12 @@ export function AppConfigModal() {
                     </div>
                     <div className="mb-4 grid gap-3 md:grid-cols-3">
                         <FeatureSwitch title="流式传输" description="开启后请求中追加 stream，支持读取中间图片事件并避免长时间无数据。" checked={Boolean(config.streamImages)} onChange={(checked) => updateConfig("streamImages", checked ? "1" : "")} />
-                        <FeatureSwitch title="返回 Base64 图片数据" description="开启后 Image API 请求会追加 response_format: b64_json。" checked={Boolean(config.responseFormatB64Json)} onChange={(checked) => updateConfig("responseFormatB64Json", checked ? "1" : "")} />
+                        <FeatureSwitch
+                            title="返回 Base64 图片数据"
+                            description="开启后 Image API 请求会追加 response_format: b64_json。"
+                            checked={Boolean(config.responseFormatB64Json)}
+                            onChange={(checked) => updateConfig("responseFormatB64Json", checked ? "1" : "")}
+                        />
                         <FeatureSwitch title="Codex CLI 兼容模式" description="开启后减少不兼容参数，并追加防提示词改写前缀。" checked={Boolean(config.codexCli)} onChange={(checked) => updateConfig("codexCli", checked ? "1" : "")} />
                     </div>
                     {canUseUserStorageProvider ? (
@@ -505,7 +528,6 @@ function channelIdForLocalModel(channels: LocalModelChannel[], model: string, cu
 function normalizeImageCount(value: string) {
     return String(Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || 3))));
 }
-
 
 function uniqueModels(models: string[]) {
     return Array.from(new Set(models.map((model) => model.trim()).filter(Boolean)));

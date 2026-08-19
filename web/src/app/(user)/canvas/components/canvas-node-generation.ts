@@ -42,14 +42,25 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     }
 
     const advanced = buildCanvasVideoAdvancedContext(sourceNode, inputs);
-    const upstreamText = sourceNode?.metadata?.excludeUpstreamText? "": inputs
-            .filter((input) => !advanced.textNodeIds.has(input.nodeId))
-            .map((input) => input.text)
-            .filter(Boolean)
-            .join("\n\n");
-    const referenceImages = inputs.filter((input) => !advanced.referenceNodeIds.has(input.nodeId)).map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
-    const referenceVideos = inputs.filter((input) => !advanced.referenceNodeIds.has(input.nodeId)).map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
-    const referenceAudios = inputs.filter((input) => !advanced.referenceNodeIds.has(input.nodeId)).map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
+    const upstreamText = sourceNode?.metadata?.excludeUpstreamText
+        ? ""
+        : inputs
+              .filter((input) => !advanced.textNodeIds.has(input.nodeId))
+              .map((input) => input.text)
+              .filter(Boolean)
+              .join("\n\n");
+    const referenceImages = inputs
+        .filter((input) => !advanced.referenceNodeIds.has(input.nodeId))
+        .map((input) => input.image)
+        .filter((image): image is ReferenceImage => Boolean(image));
+    const referenceVideos = inputs
+        .filter((input) => !advanced.referenceNodeIds.has(input.nodeId))
+        .map((input) => input.video)
+        .filter((video): video is ReferenceVideo => Boolean(video));
+    const referenceAudios = inputs
+        .filter((input) => !advanced.referenceNodeIds.has(input.nodeId))
+        .map((input) => input.audio)
+        .filter((audio): audio is ReferenceAudio => Boolean(audio));
     const frameReferences = readFrameReferences(sourceNode, inputs);
     const frameNodeIds = new Set([frameReferences.firstFrame?.id, frameReferences.lastFrame?.id].filter((id): id is string => Boolean(id)));
     const effectiveReferenceImages = referenceImages.filter((image) => !frameNodeIds.has(image.id));
@@ -104,9 +115,18 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
 
     nextPrompt += prompt.slice(lastIndex);
     if (textBlocks.length) nextPrompt = `${nextPrompt.trim()}\n\n${textBlocks.join("\n\n")}`;
-    const referenceImages = selectedInputs.filter((input) => !advanced.referenceNodeIds.has(input.nodeId)).map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
-    const referenceVideos = selectedInputs.filter((input) => !advanced.referenceNodeIds.has(input.nodeId)).map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
-    const referenceAudios = selectedInputs.filter((input) => !advanced.referenceNodeIds.has(input.nodeId)).map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
+    const referenceImages = selectedInputs
+        .filter((input) => !advanced.referenceNodeIds.has(input.nodeId))
+        .map((input) => input.image)
+        .filter((image): image is ReferenceImage => Boolean(image));
+    const referenceVideos = selectedInputs
+        .filter((input) => !advanced.referenceNodeIds.has(input.nodeId))
+        .map((input) => input.video)
+        .filter((video): video is ReferenceVideo => Boolean(video));
+    const referenceAudios = selectedInputs
+        .filter((input) => !advanced.referenceNodeIds.has(input.nodeId))
+        .map((input) => input.audio)
+        .filter((audio): audio is ReferenceAudio => Boolean(audio));
     const frameReferences = readFrameReferences(sourceNode, inputs);
     const frameNodeIds = new Set([frameReferences.firstFrame?.id, frameReferences.lastFrame?.id].filter((id): id is string => Boolean(id)));
     const effectiveReferenceImages = referenceImages.filter((image) => !frameNodeIds.has(image.id));
@@ -160,9 +180,18 @@ function selectH3FullReferences(sourceNode: CanvasNodeData | undefined, inputs: 
     const byNodeId = new Map(resourceInputs.map((input) => [input.nodeId, input]));
     const selected = (requestedIds.length ? requestedIds.map((nodeId) => byNodeId.get(nodeId)).filter((input): input is NodeGenerationInput => Boolean(input)) : resourceInputs).slice(0, 12);
     return {
-        images: selected.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image)).slice(0, 9),
-        videos: selected.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video)).slice(0, 3),
-        audios: selected.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio)).slice(0, 3),
+        images: selected
+            .map((input) => input.image)
+            .filter((image): image is ReferenceImage => Boolean(image))
+            .slice(0, 9),
+        videos: selected
+            .map((input) => input.video)
+            .filter((video): video is ReferenceVideo => Boolean(video))
+            .slice(0, 3),
+        audios: selected
+            .map((input) => input.audio)
+            .filter((audio): audio is ReferenceAudio => Boolean(audio))
+            .slice(0, 3),
     };
 }
 
@@ -211,7 +240,19 @@ function buildCanvasVideoAdvancedContext(sourceNode: CanvasNodeData | undefined,
 
 function inputToElementReference(input: NodeGenerationInput | undefined): VideoElementReference | null {
     if (input?.image) return { id: input.nodeId, kind: "image", name: input.image.name, type: input.image.type, dataUrl: input.image.dataUrl, storageKey: input.image.storageKey };
-    if (input?.video) return { id: input.nodeId, kind: "video", name: input.video.name, type: input.video.type, url: input.video.url, storageKey: input.video.storageKey, bytes: input.video.bytes, width: input.video.width, height: input.video.height, durationMs: input.video.durationMs };
+    if (input?.video)
+        return {
+            id: input.nodeId,
+            kind: "video",
+            name: input.video.name,
+            type: input.video.type,
+            url: input.video.url,
+            storageKey: input.video.storageKey,
+            bytes: input.video.bytes,
+            width: input.video.width,
+            height: input.video.height,
+            durationMs: input.video.durationMs,
+        };
     if (input?.audio) return { id: input.nodeId, kind: "audio", name: input.audio.name, type: input.audio.type, url: input.audio.url, storageKey: input.audio.storageKey, durationMs: input.audio.durationMs };
     return null;
 }

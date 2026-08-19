@@ -255,7 +255,9 @@ function scheduleAssetSync(get: () => AssetStore) {
     if (isHydratingAccountAssets || !activeAssetSyncToken || !accountAssetSyncEnabled || typeof window === "undefined") return;
     if (syncTimer) window.clearTimeout(syncTimer);
     syncTimer = window.setTimeout(() => {
-        void get().syncAccountAssets(activeAssetSyncToken).catch(() => {});
+        void get()
+            .syncAccountAssets(activeAssetSyncToken)
+            .catch(() => {});
     }, 600);
 }
 
