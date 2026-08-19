@@ -15,6 +15,7 @@ export const NODE_DEFAULT_SIZE = {
     [CanvasNodeType.Text]: { width: 340, height: 240, title: "文本" },
     [CanvasNodeType.Config]: { width: 440, height: 240, title: "生成配置" },
     [CanvasNodeType.Video]: { width: 420, height: 236, title: "视频" },
+    [CanvasNodeType.TopazVideo]: { width: 366, height: 366, title: "高清（1080P）" },
     [CanvasNodeType.Audio]: { width: 340, height: 120, title: "音频" },
     [CanvasNodeType.Director]: { width: 360, height: 320, title: "导演台" },
     [CanvasNodeType.Group]: { width: 760, height: 480, title: "组" },
@@ -40,6 +41,10 @@ export const NODE_SPECS = {
     [CanvasNodeType.Video]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Video],
         metadata: { content: "", status: "idle" },
+    },
+    [CanvasNodeType.TopazVideo]: {
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.TopazVideo],
+        metadata: { content: "", status: "idle", topazTarget: "1080p", topazQuality: "balanced", topazInterpolation: "none", topazSlowdown: "1x" },
     },
     [CanvasNodeType.Audio]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Audio],

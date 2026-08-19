@@ -15,6 +15,7 @@ export enum CanvasNodeType {
     Text = "text",
     Config = "config",
     Video = "video",
+    TopazVideo = "topazVideo",
     Audio = "audio",
     Director = "director",
     Group = "group",
@@ -83,6 +84,12 @@ export type CanvasNodeMetadata = {
     audioTaskResultId?: string;
     videoTaskId?: string;
     videoTaskVideoId?: string;
+    topazTaskId?: string;
+    topazModel?: string;
+    topazTarget?: "1080p" | "1440p" | "2160p";
+    topazQuality?: "high" | "balanced" | "compact";
+    topazInterpolation?: "none" | "2x" | "4x";
+    topazSlowdown?: "1x" | "2x" | "4x";
     firstFrameNodeId?: string;
     lastFrameNodeId?: string;
     h3ReferenceMode?: "frames" | "full";

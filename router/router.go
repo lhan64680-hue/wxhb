@@ -24,6 +24,18 @@ func New() *gin.Engine {
 	api.GET("/settings", gin.WrapF(handler.Settings))
 	api.GET("/storage/config", gin.WrapF(handler.StorageConfig))
 	api.POST("/local-ai/kimi/chat/completions", gin.WrapF(handler.LocalKimiChatCompletions))
+	api.GET("/local-topaz-video/capabilities", gin.WrapF(handler.LocalTopazVideoCapabilities))
+	api.POST("/local-topaz-video/uploads", gin.WrapF(handler.UploadLocalTopazVideo))
+	api.POST("/local-topaz-video/tasks", gin.WrapF(handler.CreateLocalTopazVideoTask))
+	api.GET("/local-topaz-video/tasks/:id", func(c *gin.Context) {
+		handler.LocalTopazVideoTask(c.Writer, c.Request, c.Param("id"))
+	})
+	api.DELETE("/local-topaz-video/tasks/:id", func(c *gin.Context) {
+		handler.CancelLocalTopazVideoTask(c.Writer, c.Request, c.Param("id"))
+	})
+	api.GET("/local-topaz-video/files/:id", func(c *gin.Context) {
+		handler.LocalTopazVideoFile(c.Writer, c.Request, c.Param("id"))
+	})
 	api.GET("/media/references/:id", func(c *gin.Context) {
 		handler.ReferenceMedia(c.Writer, c.Request, c.Param("id"))
 	})

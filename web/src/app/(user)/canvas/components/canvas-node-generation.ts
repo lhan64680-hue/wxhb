@@ -349,7 +349,7 @@ function readFrameReferences(node: CanvasNodeData | undefined, inputs: NodeGener
 }
 
 function readReferenceVideo(node: CanvasNodeData): ReferenceVideo | null {
-    if (node.type !== CanvasNodeType.Video || !node.metadata?.content) return null;
+    if ((node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.TopazVideo) || !node.metadata?.content) return null;
     return {
         id: node.id,
         name: `video-${node.id}.mp4`,

@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { ChevronRight, FileText, Image as ImageIcon, Music2, RefreshCw, Star, Video } from "lucide-react";
+import { ChevronRight, FileText, Image as ImageIcon, Music2, RefreshCw, Sparkles, Star, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes, formatDuration } from "@/lib/image-utils";
@@ -125,7 +125,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const [titleDraft, setTitleDraft] = useState(data.title || "");
     const isGroup = data.type === CanvasNodeType.Group;
     const hasImageContent = isCanvasImageNodeType(data.type) && Boolean(data.metadata?.content);
-    const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
+    const hasVideoContent = isCanvasVideoNode(data.type) && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
     const isBatchRoot = isCanvasImageNodeType(data.type) && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
     const isBatchChild = isCanvasImageNodeType(data.type) && Boolean(data.metadata?.batchRootId);
@@ -268,7 +268,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             startTop: data.position.y,
             startWidth: data.width,
             startHeight: data.height,
-            keepRatio: (isCanvasImageNodeType(data.type) && !data.metadata?.freeResize) || data.type === CanvasNodeType.Video,
+            keepRatio: (isCanvasImageNodeType(data.type) && !data.metadata?.freeResize) || isCanvasVideoNode(data.type),
             ratio: (data.metadata?.naturalWidth || data.width) / (data.metadata?.naturalHeight || data.height || 1),
         };
         window.addEventListener("mousemove", handleResizeMove);
@@ -413,7 +413,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     ) : null}
                 </div>
 
-                {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
+                {showImageInfo && (hasImageContent || hasVideoContent) ? <MediaInfoBar node={data} /> : null}
                 {!isGroup && resourceLabel ? <ResourceLabelBadge reference={resourceLabel} /> : null}
 
                 {!isGroup && !hasImageContent && !hasVideoContent && !hasAudioContent ? (
@@ -434,7 +434,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             ) : null}
 
             {showPanel && !isGroup && renderPanel ? (
-                <div className={"absolute left-1/2 top-full z-[70] max-w-[calc(100vw-24px)] -translate-x-1/2 pt-4 " + (data.type === CanvasNodeType.Image || data.type === CanvasNodeType.Video ? "w-[580px]" : "w-[500px]")}>{renderPanel(data)}</div>
+                <div className={"absolute left-1/2 top-full z-[70] max-w-[calc(100vw-24px)] -translate-x-1/2 pt-4 " + (data.type === CanvasNodeType.Image || isCanvasVideoNode(data.type) ? "w-[580px]" : "w-[500px]")}>{renderPanel(data)}</div>
             ) : null}
         </div>
     );
@@ -457,6 +457,7 @@ const nodeContentRenderers = {
     [CanvasNodeType.Panorama]: PanoramaNodeContent,
     [CanvasNodeType.Config]: EmptyImageContent,
     [CanvasNodeType.Video]: VideoNodeContent,
+    [CanvasNodeType.TopazVideo]: VideoNodeContent,
     [CanvasNodeType.Audio]: AudioNodeContent,
     [CanvasNodeType.Director]: EmptyImageContent,
 } satisfies Partial<Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>>;
@@ -474,7 +475,7 @@ function LoadingContent({ node, theme, now }: Pick<NodeContentRendererProps, "no
     const elapsedMs = Math.max(0, currentNow - startedAt);
     const progress = Math.max(0, Math.min(100, Math.round(node.metadata?.progress || 0)));
 
-    if (node.type === CanvasNodeType.Video) {
+    if (isCanvasVideoNode(node.type)) {
         return (
             <div className="flex h-full w-full flex-col justify-between overflow-hidden p-4" style={{ color: theme.node.text }}>
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
@@ -698,11 +699,15 @@ function VideoNodeContent({ node, theme }: NodeContentRendererProps) {
     if (!node.metadata?.content)
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
-                <Video className="size-7 opacity-35" />
-                <span className="text-sm">空视频节点</span>
+                {node.type === CanvasNodeType.TopazVideo ? <Sparkles className="size-7 opacity-35" /> : <Video className="size-7 opacity-35" />}
+                <span className="text-sm">{node.type === CanvasNodeType.TopazVideo ? "配置参数生成高清视频" : "空视频节点"}</span>
             </div>
         );
     return <video src={node.metadata.content} controls className="h-full w-full rounded-[18px] bg-black object-contain" data-canvas-no-zoom />;
+}
+
+function isCanvasVideoNode(type: CanvasNodeType) {
+    return type === CanvasNodeType.Video || type === CanvasNodeType.TopazVideo;
 }
 
 function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
@@ -798,7 +803,7 @@ function ImageContent({
     );
 }
 
-function ImageInfoBar({ node }: { node: CanvasNodeData }) {
+function MediaInfoBar({ node }: { node: CanvasNodeData }) {
     const width = Math.round(node.metadata?.naturalWidth || node.width);
     const height = Math.round(node.metadata?.naturalHeight || node.height);
     const size = formatBytes(node.metadata?.bytes || 0);

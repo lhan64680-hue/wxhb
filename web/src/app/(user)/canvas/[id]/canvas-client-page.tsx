@@ -4,13 +4,14 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Home, ImageIcon, Images, List, Menu, Bot, Music2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Trash2, Undo2, Upload, Video } from "lucide-react";
+import { ChevronLeft, ChevronRight, Home, ImageIcon, Images, List, Menu, Bot, Music2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Sparkles, Trash2, Undo2, Upload, Video } from "lucide-react";
 import { saveAs } from "file-saver";
 
 import { deleteCanvasProjects, deleteCanvasTasks } from "@/services/api/canvas-tasks";
 import { createCanvasImageTask, pollCanvasImageTaskStatus, requestImageQuestion, type CanvasImageTask } from "@/services/api/image";
 import { createCanvasAudioTask, pollCanvasAudioTaskStatus, type CanvasAudioTask } from "@/services/api/audio";
 import { createVideoGenerationTask, pollVideoGenerationTaskStatus, VIDEO_POLL_INTERVAL_MS, type VideoResponse } from "@/services/api/video";
+import { createTopazVideoTask, getTopazVideoCapabilities, getTopazVideoTask, type TopazVideoCapabilities, type TopazVideoTask } from "@/services/api/topaz-video";
 import { defaultConfig, isKimiK3Model, KIMI_K3_CHANNEL_ID, KIMI_K3_MODEL, MINIMAX_H3_REFERENCE_TO_VIDEO_MODEL, MINIMAX_H3_REF2VA_CHANNEL_ID, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { collectImageStorageKeys, deleteStoredImages, resolveImageUrl, uploadImage, uploadRemoteImageToServer, type UploadedImage } from "@/services/image-storage";
 import { resolveMediaUrl, uploadMediaFile, uploadRemoteMediaToServer, type UploadedFile } from "@/services/file-storage";
@@ -48,6 +49,7 @@ import { InfiniteCanvas } from "../components/infinite-canvas";
 import { Minimap } from "../components/canvas-mini-map";
 import { CanvasNode } from "../components/canvas-node";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode, type CanvasVideoFrameOption } from "../components/canvas-node-prompt-panel";
+import { CanvasTopazVideoPanel } from "../components/canvas-topaz-video-panel";
 import type { CanvasVideoResourceOption } from "../components/canvas-video-settings-popover";
 import { CanvasToolbar } from "../components/canvas-toolbar";
 import { AssetPickerModal, type AssetPickerTab } from "../components/asset-picker-modal";
@@ -212,6 +214,7 @@ function ConnectionCreateMenu({ pending, onCreate, onClose }: { pending: Pending
                 <ConnectionCreateOption theme={theme} icon={<List className="size-5" />} title="文本生成" description="脚本、广告词、品牌文案" onClick={() => onCreate(CanvasNodeType.Text)} />
                 <ConnectionCreateOption theme={theme} icon={<ImageIcon className="size-5" />} title="图片生成" onClick={() => onCreate(CanvasNodeType.Image)} />
                 <ConnectionCreateOption theme={theme} icon={<Video className="size-5" />} title="视频生成" onClick={() => onCreate(CanvasNodeType.Video)} />
+                <ConnectionCreateOption theme={theme} icon={<Sparkles className="size-5" />} title="视频高清" description="本机 Topaz Video 清晰化" onClick={() => onCreate(CanvasNodeType.TopazVideo)} />
                 <ConnectionCreateOption theme={theme} icon={<Music2 className="size-5" />} title="音频参考" onClick={() => onCreate(CanvasNodeType.Audio)} />
             </div>
         </div>
@@ -275,6 +278,7 @@ function NodeCreateMenu({ position, onCreate, onUpload, onOpenAssetLibrary, onCl
                 <ConnectionCreateOption theme={theme} icon={<List className="size-5" />} title="文本生成" description="脚本、广告词、品牌文案" onClick={() => onCreate(CanvasNodeType.Text)} />
                 <ConnectionCreateOption theme={theme} icon={<ImageIcon className="size-5" />} title="图片生成" onClick={() => onCreate(CanvasNodeType.Image)} />
                 <ConnectionCreateOption theme={theme} icon={<Video className="size-5" />} title="视频生成" onClick={() => onCreate(CanvasNodeType.Video)} />
+                <ConnectionCreateOption theme={theme} icon={<Sparkles className="size-5" />} title="视频高清" description="本机 Topaz Video 清晰化" onClick={() => onCreate(CanvasNodeType.TopazVideo)} />
                 <ConnectionCreateOption theme={theme} icon={<Music2 className="size-5" />} title="音频参考" onClick={() => onCreate(CanvasNodeType.Audio)} />
                 <div className="mb-2 mt-3 flex items-center justify-between px-1">
                     <span className="text-sm font-medium" style={{ color: theme.node.muted }}>
@@ -409,6 +413,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     const [isNodeDragging, setIsNodeDragging] = useState(false);
     const [dropTargetGroupId, setDropTargetGroupId] = useState<string | null>(null);
     const [canvasNow, setCanvasNow] = useState(Date.now());
+    const [topazCapabilities, setTopazCapabilities] = useState<TopazVideoCapabilities | null>(null);
     const resolvedAgentConfig = useMemo<CanvasAgentConfig>(
         () =>
             agentConfig || {
@@ -436,7 +441,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     const pollingVideoNodeIdsRef = useRef(new Set<string>());
     const pollingImageNodeIdsRef = useRef(new Set<string>());
     const pollingAudioNodeIdsRef = useRef(new Set<string>());
-    const hasLoadingTimedNodes = nodes.some((node) => node.metadata?.status === NODE_STATUS_LOADING && !node.metadata.content && (node.type === CanvasNodeType.Video || isCanvasImageNodeType(node.type) || node.type === CanvasNodeType.Audio));
+    const hasLoadingTimedNodes = nodes.some((node) => node.metadata?.status === NODE_STATUS_LOADING && !node.metadata.content && (isCanvasVideoNode(node.type) || isCanvasImageNodeType(node.type) || node.type === CanvasNodeType.Audio));
 
     const createHistoryEntry = useCallback(
         (): CanvasHistoryEntry => ({
@@ -618,6 +623,25 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
         const timer = window.setInterval(pollCanvasTasks, VIDEO_POLL_INTERVAL_MS);
         return () => window.clearInterval(timer);
     }, [effectiveConfig, isAiConfigReady, projectLoaded]);
+
+    useEffect(() => {
+        if (!projectLoaded) return;
+        const pollLocalTopazTasks = () => {
+            const targets = nodesRef.current.filter((node) => node.type === CanvasNodeType.TopazVideo && node.metadata?.status === NODE_STATUS_LOADING && !node.metadata?.content && node.metadata?.topazTaskId);
+            targets.forEach((node) => {
+                const taskId = node.metadata?.topazTaskId;
+                if (!taskId) return;
+                void getTopazVideoTask(taskId)
+                    .then((task) => setNodes((current) => applyTopazVideoTaskUpdate(current, node.id, task)))
+                    .catch((error) =>
+                        setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: error instanceof Error ? error.message : "Topaz 任务状态读取失败" } } : item))),
+                    );
+            });
+        };
+        pollLocalTopazTasks();
+        const timer = window.setInterval(pollLocalTopazTasks, 1500);
+        return () => window.clearInterval(timer);
+    }, [projectLoaded]);
 
     useEffect(() => {
         if (!hasLoadingTimedNodes) return;
@@ -945,7 +969,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     return text.trim() ? [{ nodeId: source.id, kind: "text" as const, label, text }] : [];
                 }
                 if (isCanvasImageNodeType(source.type) && source.metadata?.content) return [{ nodeId: source.id, kind: "image" as const, label, previewUrl: source.metadata.content }];
-                if (source.type === CanvasNodeType.Video && source.metadata?.content) return [{ nodeId: source.id, kind: "video" as const, label, previewUrl: source.metadata.content }];
+                if (isCanvasVideoNode(source.type) && source.metadata?.content) return [{ nodeId: source.id, kind: "video" as const, label, previewUrl: source.metadata.content }];
                 if (source.type === CanvasNodeType.Audio && source.metadata?.content) return [{ nodeId: source.id, kind: "audio" as const, label }];
                 return [];
             });
@@ -1870,8 +1894,62 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     }, []);
 
     const handleConfigNodeChange = useCallback((nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => {
-        setNodes((prev) => prev.map((node) => (node.id === nodeId ? applyNodeConfigPatch(node, patch) : node)));
+        const nextPatch = patch || {};
+        setNodes((prev) =>
+            prev.map((node) => {
+                if (node.id !== nodeId) return node;
+                const next = applyNodeConfigPatch(node, nextPatch);
+                return next.type === CanvasNodeType.TopazVideo && nextPatch.topazTarget ? { ...next, title: topazNodeTitle(nextPatch.topazTarget) } : next;
+            }),
+        );
     }, []);
+
+    useEffect(() => {
+        if (topazCapabilities || !nodes.some((node) => node.type === CanvasNodeType.TopazVideo)) return;
+        void getTopazVideoCapabilities()
+            .then(setTopazCapabilities)
+            .catch((error) => setTopazCapabilities({ installed: false, ready: false, models: [], error: error instanceof Error ? error.message : "无法读取本机 Topaz Video 状态" }));
+    }, [nodes, topazCapabilities]);
+
+    const runTopazVideoNode = useCallback(
+        async (node: CanvasNodeData) => {
+            if (node.type !== CanvasNodeType.TopazVideo) return;
+            const source = buildNodeGenerationInputs(node.id, nodesRef.current, connectionsRef.current).find((item) => item.video)?.video;
+            if (!source) {
+                message.warning("请先把视频输出节点连接到“视频高清”节点左侧");
+                return;
+            }
+            const startedAt = Date.now();
+            const metadata = node.metadata || {};
+            setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, content: "", startedAt, progress: 0, durationMs: undefined, errorDetails: undefined } } : item)));
+            try {
+                const task = await createTopazVideoTask(
+                    { url: source.url, storageKey: source.storageKey, name: source.name, mimeType: source.type, width: source.width, height: source.height, durationMs: source.durationMs },
+                    {
+                        model: metadata.topazModel || topazCapabilities?.defaultModel || "prob-4",
+                        target: metadata.topazTarget || "1080p",
+                        quality: metadata.topazQuality || "balanced",
+                        interpolation: metadata.topazInterpolation || "none",
+                        slowdown: metadata.topazSlowdown || "1x",
+                    },
+                );
+                let latest = task;
+                setNodes((current) => current.map((item) => (item.id === node.id ? applyTopazVideoTaskToNode(item, latest) : item)));
+                while (["queued", "probing", "running", "canceling"].includes(latest.status)) {
+                    await sleep(1200);
+                    latest = await getTopazVideoTask(task.id);
+                    setNodes((current) => current.map((item) => (item.id === node.id ? applyTopazVideoTaskToNode(item, latest) : item)));
+                }
+                if (latest.status === "failed") message.error(latest.error || "Topaz 高清处理失败");
+                if (latest.status === "canceled") message.info("Topaz 高清任务已取消");
+            } catch (error) {
+                const errorDetails = error instanceof Error ? error.message : "Topaz 高清任务创建失败";
+                setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails } } : item)));
+                message.error(errorDetails);
+            }
+        },
+        [message, topazCapabilities?.defaultModel],
+    );
 
     const handleDirectorProjectChange = useCallback(
         (project: unknown) => {
@@ -1946,8 +2024,8 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     );
 
     const downloadNodeImage = useCallback((node: CanvasNodeData) => {
-        if ((!isCanvasImageNodeType(node.type) && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
-        saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
+        if ((!isCanvasImageNodeType(node.type) && !isCanvasVideoNode(node.type) && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
+        saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${isCanvasVideoNode(node.type) ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
     }, []);
 
     const uploadNodeVideoToCloud = useCallback(
@@ -3993,7 +4071,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                             showImageInfo={showImageInfo}
                             resourceLabel={resourceReferenceByNodeId.get(node.id)}
                             mentionReferences={mentionReferencesByNodeId.get(node.id) || []}
-                            now={node.metadata?.status === NODE_STATUS_LOADING && !node.metadata.content && (node.type === CanvasNodeType.Video || isCanvasImageNodeType(node.type) || node.type === CanvasNodeType.Audio) ? canvasNow : undefined}
+                            now={node.metadata?.status === NODE_STATUS_LOADING && !node.metadata.content && (isCanvasVideoNode(node.type) || isCanvasImageNodeType(node.type) || node.type === CanvasNodeType.Audio) ? canvasNow : undefined}
                             renderPanel={(panelNode) =>
                                 panelNode.type === CanvasNodeType.Config ? (
                                     <CanvasConfigComposer
@@ -4002,7 +4080,19 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                                         onChange={(composerContent) => handleConfigNodeChange(panelNode.id, { composerContent })}
                                         onClose={() => setDialogNodeId(null)}
                                     />
-                                ) : panelNode.type === CanvasNodeType.Director ? null : (
+                                ) : panelNode.type === CanvasNodeType.Director ? null : panelNode.type === CanvasNodeType.TopazVideo ? (
+                                    <CanvasTopazVideoPanel
+                                        node={panelNode}
+                                        capabilities={topazCapabilities}
+                                        isRunning={panelNode.metadata?.status === NODE_STATUS_LOADING}
+                                        hasVideoInput={Boolean(buildNodeGenerationInputs(panelNode.id, nodes, connections).some((item) => item.video))}
+                                        onConfigChange={handleConfigNodeChange}
+                                        onGenerate={(nodeId) => {
+                                            const target = nodesRef.current.find((item) => item.id === nodeId);
+                                            if (target) void runTopazVideoNode(target);
+                                        }}
+                                    />
+                                ) : (
                                     <CanvasNodePromptPanel
                                         node={panelNode}
                                         isRunning={runningNodeId === panelNode.id}
@@ -4052,7 +4142,10 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                             onTitleChange={handleNodeTitleChange}
                             onToggleBatch={toggleBatchExpanded}
                             onSetBatchPrimary={setBatchPrimary}
-                            onRetry={(node) => void handleRetryNode(node)}
+                            onRetry={(node) => {
+                                if (node.type === CanvasNodeType.TopazVideo) void runTopazVideoNode(node);
+                                else void handleRetryNode(node);
+                            }}
                             onGenerateImage={generateImageFromTextNode}
                             onViewImage={(node) => setPreviewNodeId(node.id)}
                             onContextMenu={(event, id) => {
@@ -4154,6 +4247,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     showImageInfo={showImageInfo}
                     onAddImage={() => createNode(CanvasNodeType.Image)}
                     onAddVideo={() => createNode(CanvasNodeType.Video)}
+                    onAddTopazVideo={() => createNode(CanvasNodeType.TopazVideo)}
                     onAddAudio={() => createNode(CanvasNodeType.Audio)}
                     onAddText={() => createNode(CanvasNodeType.Text)}
                     onUndo={undoCanvas}
@@ -4774,7 +4868,7 @@ async function hydrateCanvasImages(nodes: CanvasNodeData[]) {
     return Promise.all(
         nodes.map(async (node) => {
             const content = node.metadata?.content;
-            if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveMediaUrl(node.metadata.storageKey, content) } };
+            if ((isCanvasVideoNode(node.type) || node.type === CanvasNodeType.Audio) && node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveMediaUrl(node.metadata.storageKey, content) } };
             if (!isCanvasImageNodeType(node.type) || !content) return node;
             if (node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveImageUrl(node.metadata.storageKey, content) } };
             if (!content.startsWith("data:image/")) return node;
@@ -4820,9 +4914,71 @@ function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<CanvasNodeDat
     const safePatch = patch || {};
     const isPanorama = isPanoramaNodeType(node.type);
     const next = { ...node, metadata: { ...node.metadata, ...safePatch, ...(isPanorama ? { size: PANORAMA_IMAGE_SIZE } : {}) } };
-    const spec = isPanorama ? NODE_DEFAULT_SIZE[CanvasNodeType.Panorama] : node.type === CanvasNodeType.Video ? NODE_DEFAULT_SIZE[CanvasNodeType.Video] : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
+    const spec = isPanorama ? NODE_DEFAULT_SIZE[CanvasNodeType.Panorama] : isCanvasVideoNode(node.type) ? NODE_DEFAULT_SIZE[node.type] : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
     const size = !isPanorama && typeof safePatch.size === "string" && !node.metadata?.content ? nodeSizeFromRatio(safePatch.size, spec.width, spec.height) : null;
-    return size && (isCanvasImageNodeType(node.type) || node.type === CanvasNodeType.Video) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
+    return size && (isCanvasImageNodeType(node.type) || isCanvasVideoNode(node.type)) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
+}
+
+function applyTopazVideoTaskUpdate(nodes: CanvasNodeData[], nodeId: string, task: TopazVideoTask) {
+    return nodes.map((node) => (node.id === nodeId ? applyTopazVideoTaskToNode(node, task) : node));
+}
+
+function applyTopazVideoTaskToNode(node: CanvasNodeData, task: TopazVideoTask): CanvasNodeData {
+    const current = node.metadata || {};
+    const baseMetadata: CanvasNodeMetadata = {
+        ...current,
+        topazTaskId: task.id,
+        progress: Math.max(0, Math.min(100, Math.round(task.progress || 0))),
+        durationMs: task.durationMs || current.durationMs,
+    };
+    if (task.status === "succeeded" && task.outputUrl) {
+        return {
+            ...node,
+            title: topazNodeTitle(current.topazTarget || "1080p"),
+            metadata: {
+                ...baseMetadata,
+                content: task.outputUrl,
+                storageKey: undefined,
+                status: NODE_STATUS_SUCCESS,
+                errorDetails: undefined,
+                naturalWidth: task.outputWidth || current.naturalWidth,
+                naturalHeight: task.outputHeight || current.naturalHeight,
+                bytes: task.outputBytes || current.bytes,
+                mimeType: task.outputMimeType || "video/mp4",
+            },
+        };
+    }
+    if (task.status === "failed" || task.status === "canceled") {
+        return {
+            ...node,
+            metadata: {
+                ...baseMetadata,
+                status: NODE_STATUS_ERROR,
+                errorDetails: task.error || (task.status === "canceled" ? "Topaz 高清任务已取消" : "Topaz 高清处理失败"),
+            },
+        };
+    }
+    return {
+        ...node,
+        metadata: {
+            ...baseMetadata,
+            status: NODE_STATUS_LOADING,
+            startedAt: current.startedAt || parseCanvasTaskTime(task.startedAt) || Date.now(),
+            errorDetails: undefined,
+        },
+    };
+}
+
+function topazNodeTitle(target: "1080p" | "1440p" | "2160p") {
+    return `高清（${target === "1440p" ? "2K" : target === "2160p" ? "4K" : "1080P"}）`;
+}
+
+function isCanvasVideoNode(type: CanvasNodeType) {
+    return type === CanvasNodeType.Video || type === CanvasNodeType.TopazVideo;
+}
+
+function sleep(milliseconds: number) {
+    return new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHandle) {

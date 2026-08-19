@@ -3,7 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Empty, Input, Pagination, Select, Spin } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, ChevronRight, Clapperboard, Eye, FileText, Group, Image as ImageIcon, Music2, Plus, Search, Settings2, Type, Video } from "lucide-react";
+import { BookOpen, ChevronRight, Clapperboard, Eye, FileText, Group, Image as ImageIcon, Music2, Plus, Search, Settings2, Sparkles, Type, Video } from "lucide-react";
 import { motion } from "motion/react";
 
 import { AssetFormModal } from "@/components/assets/asset-form-modal";
@@ -47,6 +47,7 @@ const NODE_TYPE_ICON = {
     [CanvasNodeType.Image]: ImageIcon,
     [CanvasNodeType.Panorama]: ImageIcon,
     [CanvasNodeType.Video]: Video,
+    [CanvasNodeType.TopazVideo]: Sparkles,
     [CanvasNodeType.Audio]: Music2,
     [CanvasNodeType.Text]: Type,
     [CanvasNodeType.Config]: Settings2,
@@ -58,6 +59,7 @@ const NODE_TYPE_LABEL = {
     [CanvasNodeType.Image]: "图片",
     [CanvasNodeType.Panorama]: "全景图",
     [CanvasNodeType.Video]: "视频",
+    [CanvasNodeType.TopazVideo]: "视频高清",
     [CanvasNodeType.Audio]: "音频",
     [CanvasNodeType.Text]: "文本",
     [CanvasNodeType.Config]: "生成配置",
@@ -72,6 +74,7 @@ const NODE_FILTER_OPTIONS = [
     { label: "文本", value: CanvasNodeType.Text },
     { label: "配置", value: CanvasNodeType.Config },
     { label: "视频", value: CanvasNodeType.Video },
+    { label: "视频高清", value: CanvasNodeType.TopazVideo },
     { label: "音频", value: CanvasNodeType.Audio },
     { label: "导演台", value: CanvasNodeType.Director },
     { label: "组", value: CanvasNodeType.Group },
