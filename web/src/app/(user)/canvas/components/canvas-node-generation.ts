@@ -15,6 +15,7 @@ export type NodeGenerationContext = {
     lastFrame: ReferenceImage | null;
     referenceVideos: ReferenceVideo[];
     referenceAudios: ReferenceAudio[];
+    h3FullReference: boolean;
     videoMultiPrompt: VideoMultiPromptItem[];
     videoElementList: VideoElementItem[];
     textCount: number;
@@ -52,14 +53,17 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     const frameReferences = readFrameReferences(sourceNode, inputs);
     const frameNodeIds = new Set([frameReferences.firstFrame?.id, frameReferences.lastFrame?.id].filter((id): id is string => Boolean(id)));
     const effectiveReferenceImages = referenceImages.filter((image) => !frameNodeIds.has(image.id));
+    const h3FullReference = sourceNode?.metadata?.h3ReferenceMode === "full";
+    const h3References = h3FullReference ? selectH3FullReferences(sourceNode, inputs) : emptyH3FullReferences();
 
     return {
         prompt: upstreamText ? `${prompt}\n\n${upstreamText}` : prompt,
-        referenceImages: [...advanced.klingImageReferences, ...effectiveReferenceImages],
-        firstFrame: frameReferences.firstFrame,
-        lastFrame: frameReferences.lastFrame,
-        referenceVideos,
-        referenceAudios,
+        referenceImages: h3FullReference ? h3References.images : [...advanced.klingImageReferences, ...effectiveReferenceImages],
+        firstFrame: h3FullReference ? null : frameReferences.firstFrame,
+        lastFrame: h3FullReference ? null : frameReferences.lastFrame,
+        referenceVideos: h3FullReference ? h3References.videos : referenceVideos,
+        referenceAudios: h3FullReference ? h3References.audios : referenceAudios,
+        h3FullReference,
         videoMultiPrompt: advanced.videoMultiPrompt,
         videoElementList: advanced.videoElementList,
         textCount: inputs.filter((input) => input.type === "text").length,
@@ -106,37 +110,59 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
     const frameReferences = readFrameReferences(sourceNode, inputs);
     const frameNodeIds = new Set([frameReferences.firstFrame?.id, frameReferences.lastFrame?.id].filter((id): id is string => Boolean(id)));
     const effectiveReferenceImages = referenceImages.filter((image) => !frameNodeIds.has(image.id));
+    const h3FullReference = sourceNode?.metadata?.h3ReferenceMode === "full";
+    const h3References = h3FullReference ? selectH3FullReferences(sourceNode, inputs) : emptyH3FullReferences();
 
     if (!hasToken) {
         return {
             prompt,
-            referenceImages: advanced.klingImageReferences,
-            firstFrame: frameReferences.firstFrame,
-            lastFrame: frameReferences.lastFrame,
-            referenceVideos: [],
-            referenceAudios: [],
+            referenceImages: h3FullReference ? h3References.images : advanced.klingImageReferences,
+            firstFrame: h3FullReference ? null : frameReferences.firstFrame,
+            lastFrame: h3FullReference ? null : frameReferences.lastFrame,
+            referenceVideos: h3FullReference ? h3References.videos : [],
+            referenceAudios: h3FullReference ? h3References.audios : [],
+            h3FullReference,
             videoMultiPrompt: advanced.videoMultiPrompt,
             videoElementList: advanced.videoElementList,
             textCount: 0,
-            imageCount: 0,
-            videoCount: 0,
-            audioCount: 0,
+            imageCount: h3References.images.length,
+            videoCount: h3References.videos.length,
+            audioCount: h3References.audios.length,
         };
     }
 
     return {
         prompt: nextPrompt,
-        referenceImages: [...advanced.klingImageReferences, ...effectiveReferenceImages],
-        firstFrame: frameReferences.firstFrame,
-        lastFrame: frameReferences.lastFrame,
-        referenceVideos,
-        referenceAudios,
+        referenceImages: h3FullReference ? h3References.images : [...advanced.klingImageReferences, ...effectiveReferenceImages],
+        firstFrame: h3FullReference ? null : frameReferences.firstFrame,
+        lastFrame: h3FullReference ? null : frameReferences.lastFrame,
+        referenceVideos: h3FullReference ? h3References.videos : referenceVideos,
+        referenceAudios: h3FullReference ? h3References.audios : referenceAudios,
+        h3FullReference,
         videoMultiPrompt: advanced.videoMultiPrompt,
         videoElementList: advanced.videoElementList,
         textCount: counts.text,
         imageCount: referenceImages.length,
         videoCount: referenceVideos.length,
         audioCount: referenceAudios.length,
+    };
+}
+
+type H3FullReferences = { images: ReferenceImage[]; videos: ReferenceVideo[]; audios: ReferenceAudio[] };
+
+function emptyH3FullReferences(): H3FullReferences {
+    return { images: [], videos: [], audios: [] };
+}
+
+function selectH3FullReferences(sourceNode: CanvasNodeData | undefined, inputs: NodeGenerationInput[]): H3FullReferences {
+    const resourceInputs = inputs.filter((input) => input.type === "image" || input.type === "video" || input.type === "audio");
+    const requestedIds = sourceNode?.metadata?.h3ReferenceNodeIds || [];
+    const byNodeId = new Map(resourceInputs.map((input) => [input.nodeId, input]));
+    const selected = (requestedIds.length ? requestedIds.map((nodeId) => byNodeId.get(nodeId)).filter((input): input is NodeGenerationInput => Boolean(input)) : resourceInputs).slice(0, 12);
+    return {
+        images: selected.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image)).slice(0, 9),
+        videos: selected.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video)).slice(0, 3),
+        audios: selected.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio)).slice(0, 3),
     };
 }
 
@@ -204,27 +230,50 @@ export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[
     });
 }
 
-export function buildNodeChatMessages(context: NodeGenerationContext): ChatCompletionMessage[] {
-    if (!context.referenceImages.length) {
+export function buildNodeChatMessages(context: NodeGenerationContext, options: { includeVideoReferences?: boolean } = {}): ChatCompletionMessage[] {
+    const referenceVideos = options.includeVideoReferences ? context.referenceVideos.filter((video) => video.url.startsWith("data:video/")) : [];
+    if (!context.referenceImages.length && !referenceVideos.length) {
         return [{ role: "user", content: context.prompt }];
     }
 
     return [
         {
             role: "user",
-            content: [{ type: "text" as const, text: context.prompt }, ...context.referenceImages.map((image) => ({ type: "image_url" as const, image_url: { url: image.dataUrl } }))],
+            content: [
+                { type: "text" as const, text: context.prompt },
+                ...context.referenceImages.map((image) => ({ type: "image_url" as const, image_url: { url: image.dataUrl } })),
+                ...referenceVideos.map((video) => ({ type: "video_url" as const, video_url: { url: video.url } })),
+            ],
         },
     ];
 }
 
-export async function hydrateNodeGenerationContext(context: NodeGenerationContext) {
+export async function hydrateNodeGenerationContext(context: NodeGenerationContext, options: { includeVideoDataUrls?: boolean } = {}) {
     const { imageToDataUrl } = await import("@/services/image-storage");
     return {
         ...context,
         referenceImages: await Promise.all(context.referenceImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) }))),
         firstFrame: context.firstFrame ? { ...context.firstFrame, dataUrl: await imageToDataUrl(context.firstFrame) } : null,
         lastFrame: context.lastFrame ? { ...context.lastFrame, dataUrl: await imageToDataUrl(context.lastFrame) } : null,
+        referenceVideos: options.includeVideoDataUrls ? await Promise.all(context.referenceVideos.map(async (video) => ({ ...video, url: await videoToDataUrl(video) }))) : context.referenceVideos,
     };
+}
+
+async function videoToDataUrl(video: ReferenceVideo) {
+    if (video.url.startsWith("data:video/")) return video.url;
+    const [{ getProxyUrl }, { getMediaBlob, resolveMediaUrl }] = await Promise.all([import("@/services/image-storage"), import("@/services/file-storage")]);
+    let blob = video.storageKey && !video.storageKey.startsWith("server:") ? await getMediaBlob(video.storageKey).catch(() => null) : null;
+    if (!blob) {
+        const response = await fetch(getProxyUrl(await resolveMediaUrl(video.storageKey, video.url)));
+        if (!response.ok) throw new Error(`读取视频参考失败：${response.status}`);
+        blob = await response.blob();
+    }
+    return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("读取视频参考失败"));
+        reader.readAsDataURL(blob.type ? blob : new Blob([blob], { type: video.type || "video/mp4" }));
+    });
 }
 
 function readNodeTextInput(node: CanvasNodeData) {

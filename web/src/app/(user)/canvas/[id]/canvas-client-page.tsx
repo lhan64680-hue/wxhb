@@ -4,14 +4,14 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Globe2, Home, ImageIcon, Images, Layers3, List, Menu, Bot, Music2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
+import { ChevronLeft, ChevronRight, Home, ImageIcon, Images, List, Menu, Bot, Music2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Trash2, Undo2, Upload, Video } from "lucide-react";
 import { saveAs } from "file-saver";
 
 import { deleteCanvasProjects, deleteCanvasTasks } from "@/services/api/canvas-tasks";
 import { createCanvasImageTask, pollCanvasImageTaskStatus, requestImageQuestion, type CanvasImageTask } from "@/services/api/image";
 import { createCanvasAudioTask, pollCanvasAudioTaskStatus, type CanvasAudioTask } from "@/services/api/audio";
 import { createVideoGenerationTask, pollVideoGenerationTaskStatus, VIDEO_POLL_INTERVAL_MS, type VideoResponse } from "@/services/api/video";
-import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { defaultConfig, isKimiK3Model, KIMI_K3_CHANNEL_ID, KIMI_K3_MODEL, MINIMAX_H3_REFERENCE_TO_VIDEO_MODEL, MINIMAX_H3_REF2VA_CHANNEL_ID, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { collectImageStorageKeys, deleteStoredImages, resolveImageUrl, uploadImage, uploadRemoteImageToServer, type UploadedImage } from "@/services/image-storage";
 import { resolveMediaUrl, uploadMediaFile, uploadRemoteMediaToServer, type UploadedFile } from "@/services/file-storage";
 import { nanoid } from "nanoid";
@@ -25,6 +25,7 @@ import { cropDataUrl, splitDataUrl, upscaleDataUrl } from "../utils/canvas-image
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { PANORAMA_IMAGE_SIZE, PANORAMA_NODE_SIZE, buildPanoramaPrompt, isCanvasImageNodeType, isPanoramaNodeType } from "../utils/canvas-panorama";
 import { applyCameraPrompt } from "../utils/canvas-camera";
+import { buildCanvasTextCreativePrompt } from "../utils/canvas-text-creative";
 import { GROUP_PADDING, findContainingGroupId, findGroupDropTarget, getNodeBounds, snapNodesIntoGroup } from "../utils/canvas-group";
 import { App, Button, Dropdown, Modal } from "antd";
 import { modelKey, supportsVideoAudioGeneration, supportsVideoFrameReferences } from "@/lib/video-model-capabilities";
@@ -212,9 +213,6 @@ function ConnectionCreateMenu({ pending, onCreate, onClose }: { pending: Pending
                 <ConnectionCreateOption theme={theme} icon={<ImageIcon className="size-5" />} title="图片生成" onClick={() => onCreate(CanvasNodeType.Image)} />
                 <ConnectionCreateOption theme={theme} icon={<Video className="size-5" />} title="视频生成" onClick={() => onCreate(CanvasNodeType.Video)} />
                 <ConnectionCreateOption theme={theme} icon={<Music2 className="size-5" />} title="音频参考" onClick={() => onCreate(CanvasNodeType.Audio)} />
-                <ConnectionCreateOption theme={theme} icon={<Globe2 className="size-5" />} title="全景图" description="文生全景、图生全景" onClick={() => onCreate(CanvasNodeType.Panorama)} />
-                <ConnectionCreateOption theme={theme} icon={<Layers3 className="size-5" />} title="3D 导演台" description="3D场景、角色、机位" onClick={() => onCreate(CanvasNodeType.Director)} />
-                <ConnectionCreateOption theme={theme} icon={<Settings2 className="size-5" />} title="配置节点" description="模型、尺寸、数量和输入顺序" onClick={() => onCreate(CanvasNodeType.Config)} />
             </div>
         </div>
     );
@@ -269,15 +267,24 @@ function NodeCreateMenu({
                 <ConnectionCreateOption theme={theme} icon={<ImageIcon className="size-5" />} title="图片生成" onClick={() => onCreate(CanvasNodeType.Image)} />
                 <ConnectionCreateOption theme={theme} icon={<Video className="size-5" />} title="视频生成" onClick={() => onCreate(CanvasNodeType.Video)} />
                 <ConnectionCreateOption theme={theme} icon={<Music2 className="size-5" />} title="音频参考" onClick={() => onCreate(CanvasNodeType.Audio)} />
-                <ConnectionCreateOption theme={theme} icon={<Globe2 className="size-5" />} title="全景图" description="文生全景、图生全景" onClick={() => onCreate(CanvasNodeType.Panorama)} />
-                <ConnectionCreateOption theme={theme} icon={<Layers3 className="size-5" />} title="3D 导演台" description="3D场景、角色、机位" onClick={() => onCreate(CanvasNodeType.Director)} />
-                <ConnectionCreateOption theme={theme} icon={<Settings2 className="size-5" />} title="配置节点" description="模型、尺寸、数量和输入顺序" onClick={() => onCreate(CanvasNodeType.Config)} />
                 <div className="mb-2 mt-3 flex items-center justify-between px-1">
                     <span className="text-sm font-medium" style={{ color: theme.node.muted }}>添加资源</span>
                 </div>
                 <ConnectionCreateOption theme={theme} icon={<Upload className="size-5" />} title="上传" description="图片、视频或音频" onClick={onUpload} />
                 <ConnectionCreateOption theme={theme} icon={<Images className="size-5" />} title="从素材库选择" description="文本、图片或视频" onClick={onOpenAssetLibrary} />
             </div>
+            <p className="px-1 pb-1 pt-2 text-xs leading-5" style={{ color: theme.node.muted }}>创建后拖动节点两侧连接点，即可建立上下游关系。</p>
+        </div>
+    );
+}
+
+function CanvasStartHint() {
+    return (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[300px] -translate-x-1/2 -translate-y-1/2 text-center">
+            <span className="mx-auto grid size-12 place-items-center rounded-2xl border border-white/15 bg-white/[.06] text-xl text-cyan-200">+</span>
+            <h2 className="mt-4 text-lg font-semibold text-stone-100">从第一个节点开始</h2>
+            <p className="mt-2 text-sm leading-6 text-stone-400">双击空白画布添加文本、图片、视频或音频节点。</p>
+            <p className="mt-1 text-xs text-stone-500">拖动节点两侧的圆点，连接你的创作流程。</p>
         </div>
     );
 }
@@ -356,7 +363,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>("lines");
-    const [showImageInfo, setShowImageInfo] = useState(false);
+    const [showImageInfo, setShowImageInfo] = useState(true);
     const [sidePanel, setSidePanel] = useState(() => DEFAULT_CANVAS_SIDE_PANEL);
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
@@ -486,7 +493,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             setActiveChatId(project.activeChatId || null);
             setAgentConfig(project.agentConfig || null);
             setBackgroundMode(project.backgroundMode);
-            setShowImageInfo(project.showImageInfo || false);
+            setShowImageInfo(project.showImageInfo ?? true);
             setViewport(project.viewport);
             setSidePanel(project.sidePanel || DEFAULT_CANVAS_SIDE_PANEL);
             const restoredAgentPanel = project.agentPanel || DEFAULT_CANVAS_AGENT_PANEL;
@@ -501,7 +508,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 nodes: restoredNodes,
                 connections: project.connections,
                 backgroundMode: project.backgroundMode,
-                showImageInfo: project.showImageInfo || false,
+                showImageInfo: project.showImageInfo ?? true,
             };
             setHistoryState({ canUndo: false, canRedo: false });
             setProjectLoaded(true);
@@ -716,7 +723,11 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
 
     const createConnectedNode = useCallback(
         (type: CanvasNodeType, pending: PendingConnectionCreate) => {
-            const metadata = type === CanvasNodeType.Config ? { model: effectiveConfig.imageModel || effectiveConfig.model, size: effectiveConfig.size, count: getGenerationCount(effectiveConfig.canvasImageCount || effectiveConfig.count) } : undefined;
+            const metadata = type === CanvasNodeType.Config
+                ? { model: effectiveConfig.imageModel || effectiveConfig.model, size: effectiveConfig.size, count: getGenerationCount(effectiveConfig.canvasImageCount || effectiveConfig.count) }
+                : type === CanvasNodeType.Text
+                    ? { model: KIMI_K3_MODEL, channelId: KIMI_K3_CHANNEL_ID, textCreativeMode: "write" as const }
+                    : undefined;
             const newNode = createCanvasNode(type, pending.position, metadata);
             const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
             if (!connection) {
@@ -727,7 +738,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             setConnections((prev) => [...prev, { id: nanoid(), ...connection }]);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
-            if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Director) setDialogNodeId(newNode.id);
+            if (type !== CanvasNodeType.Audio && type !== CanvasNodeType.Director) setDialogNodeId(newNode.id);
             setPendingConnectionCreate(null);
             setConnecting(null);
         },
@@ -931,19 +942,23 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                         count: getGenerationCount(effectiveConfig.canvasImageCount || effectiveConfig.count),
                     }
                     : undefined;
+            const textMetadata =
+                type === CanvasNodeType.Text
+                    ? { model: KIMI_K3_MODEL, channelId: KIMI_K3_CHANNEL_ID, textCreativeMode: "write" as const }
+                    : undefined;
             const newNode = createCanvasNode(
                 type,
                 targetPosition,
                 type === CanvasNodeType.Text && textContent !== undefined
-                    ? { content: textContent, status: NODE_STATUS_SUCCESS }
-                    : configMetadata,
+                    ? { ...textMetadata, content: textContent, status: NODE_STATUS_SUCCESS }
+                    : textMetadata || configMetadata,
                 nodeId,
             );
             if (type === CanvasNodeType.Text && textContent !== undefined) newNode.title = textContent.slice(0, 32) || "Assistant Text";
             setNodes((prev) => [...prev, newNode]);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
-            if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Director) setDialogNodeId(newNode.id);
+            if (type !== CanvasNodeType.Audio && type !== CanvasNodeType.Director) setDialogNodeId(newNode.id);
         },
         [effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, getCanvasCenter],
     );
@@ -1386,7 +1401,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             if (clickedNode?.type === CanvasNodeType.Group) {
                 setDialogNodeId(null);
             } else if (clickedNode?.type === CanvasNodeType.Text) {
-                setDialogNodeId((current) => (current === clickedNodeId ? current : null));
+                setDialogNodeId((current) => (current === clickedNodeId ? null : clickedNodeId));
             } else {
                 setDialogNodeId(clickedNodeId);
             }
@@ -2481,8 +2496,16 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             setRunningNodeId(nodeId);
             const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
             const editingTextNode = mode === "text" && Boolean(sourceTextContent);
+            const textRequest = editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt;
+            const isKimiMultimodalText = mode === "text" && isKimiK3Model(generationConfig.model);
             const generationContext = await hydrateNodeGenerationContext(
-                buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt),
+                buildNodeGenerationContext(
+                    nodeId,
+                    nodesRef.current,
+                    connectionsRef.current,
+                    mode === "text" ? buildCanvasTextCreativePrompt(sourceNode?.metadata?.textCreativeMode, textRequest) : prompt,
+                ),
+                { includeVideoDataUrls: isKimiMultimodalText },
             );
             const effectivePrompt = generationContext.prompt.trim();
             const requestPrompt =
@@ -2600,6 +2623,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                             try {
                                 const task = await createCanvasImageTask({ ...panoramaGenerationConfig, count: "1", quality: panoramaGenerationConfig.quality === "auto" ? "medium" : panoramaGenerationConfig.quality }, panoramaPrompt, referenceImages, { nodeId: targetId, sourceId: projectId, clientTaskId: targetTaskIds[targetId] });
                                 if (task.image_url || task.url) {
+                                    setShowImageInfo(true);
                                     setNodes((prev) => {
                                         const root = prev.find((node) => node.id === rootId);
                                         let next = applyCanvasImageTaskUpdate(prev, targetId, task, generationStartedAt, { width: panoramaNodeConfig.width, height: panoramaNodeConfig.height });
@@ -2608,7 +2632,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                                         }
                                         return next;
                                     });
-                                    return true;
+                                    return { success: true, errorDetails: "" };
                                 }
                                 setNodes((prev) => {
                                     const root = prev.find((node) => node.id === rootId);
@@ -2752,6 +2776,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                             try {
                                 const task = await createCanvasImageTask({ ...generationConfig, count: "1" }, requestPrompt, referenceImages, { nodeId: targetId, sourceId: projectId, clientTaskId: targetTaskIds[targetId] });
                                 if (task.image_url || task.url) {
+                                    setShowImageInfo(true);
                                     setNodes((prev) => {
                                         const root = prev.find((node) => node.id === rootId);
                                         let next = applyCanvasImageTaskUpdate(prev, targetId, task, generationStartedAt, { width: imageSize.width, height: imageSize.height });
@@ -2760,7 +2785,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                                         }
                                         return next;
                                     });
-                                    return true;
+                                    return { success: true, errorDetails: "" };
                                 }
                                 setNodes((prev) => {
                                     const root = prev.find((node) => node.id === rootId);
@@ -2780,23 +2805,24 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                                     });
                                 });
                                 if (isConfigNode) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined } } : node)));
-                                return true;
+                                return { success: true, errorDetails: "" };
                             } catch (error) {
                                 const errorDetails = error instanceof Error ? error.message : "生成失败";
                                 setNodes((prev) => prev.map((node) => (node.id === targetId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails } } : node)));
-                                return false;
+                                return { success: false, errorDetails };
                             }
                         }),
                     );
-                    const hasSuccess = taskResults.some(Boolean);
-                    const hasFailure = taskResults.some((result) => !result);
-                    if (hasFailure) message.error(hasSuccess ? "部分图片任务创建失败" : "全部图片任务创建失败");
+                    const hasSuccess = taskResults.some((result) => result.success);
+                    const hasFailure = taskResults.some((result) => !result.success);
+                    const errorDetails = taskResults.find((result) => !result.success)?.errorDetails || "图片任务创建失败";
+                    if (hasFailure) message.error(`${hasSuccess ? "部分图片任务创建失败" : "全部图片任务创建失败"}：${errorDetails}`);
                     setNodes((prev) =>
                         prev.map((node) =>
                             node.id === nodeId && isConfigNode
-                                ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : "全部图片任务创建失败" } }
+                                ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : errorDetails } }
                                 : node.id === rootId && !hasSuccess
-                                    ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails: "全部图片任务创建失败" } }
+                                    ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails } }
                                     : node,
                         ),
                     );
@@ -2821,7 +2847,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                         position: isEmptyVideoNode ? sourceNode.position : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y },
                         width: isEmptyVideoNode ? sourceNode.width : spec.width,
                         height: isEmptyVideoNode ? sourceNode.height : spec.height,
-                        metadata: { prompt: effectivePrompt, cameraControl: sourceNode?.metadata?.cameraControl, status: NODE_STATUS_LOADING, model: videoGenerationConfig.model, channelId: videoGenerationConfig.videoChannelId || videoGenerationConfig.activeChannelId, size: videoGenerationConfig.size, seconds: videoGenerationConfig.videoSeconds, vquality: videoGenerationConfig.vquality, mode: videoGenerationConfig.videoMode, negativePrompt: videoGenerationConfig.videoNegativePrompt, multiShot: videoGenerationConfig.videoMultiShot, shotType: videoGenerationConfig.videoShotType, generateAudio: videoGenerationConfig.videoGenerateAudio, characterOrientation: videoGenerationConfig.videoCharacterOrientation, watermark: videoGenerationConfig.videoWatermark, references: generationReferenceUrls({ ...generationContext, referenceImages: videoReferenceImages, firstFrame, lastFrame }), firstFrameNodeId: sourceNode?.metadata?.firstFrameNodeId, lastFrameNodeId: sourceNode?.metadata?.lastFrameNodeId, klingImageNodeIds: sourceNode?.metadata?.klingImageNodeIds, klingMultiPrompt: sourceNode?.metadata?.klingMultiPrompt, klingElementList: sourceNode?.metadata?.klingElementList, startedAt: generationStartedAt, progress: 0, videoTaskId: clientTaskId },
+                        metadata: { prompt: effectivePrompt, cameraControl: sourceNode?.metadata?.cameraControl, status: NODE_STATUS_LOADING, model: videoGenerationConfig.model, channelId: videoGenerationConfig.videoChannelId || videoGenerationConfig.activeChannelId, size: videoGenerationConfig.size, seconds: videoGenerationConfig.videoSeconds, vquality: videoGenerationConfig.vquality, mode: videoGenerationConfig.videoMode, negativePrompt: videoGenerationConfig.videoNegativePrompt, multiShot: videoGenerationConfig.videoMultiShot, shotType: videoGenerationConfig.videoShotType, generateAudio: videoGenerationConfig.videoGenerateAudio, characterOrientation: videoGenerationConfig.videoCharacterOrientation, watermark: videoGenerationConfig.videoWatermark, references: generationReferenceUrls({ ...generationContext, referenceImages: videoReferenceImages, firstFrame, lastFrame }), firstFrameNodeId: sourceNode?.metadata?.firstFrameNodeId, lastFrameNodeId: sourceNode?.metadata?.lastFrameNodeId, h3ReferenceMode: generationContext.h3FullReference ? "full" : sourceNode?.metadata?.h3ReferenceMode, h3ReferenceNodeIds: sourceNode?.metadata?.h3ReferenceNodeIds, klingImageNodeIds: sourceNode?.metadata?.klingImageNodeIds, klingMultiPrompt: sourceNode?.metadata?.klingMultiPrompt, klingElementList: sourceNode?.metadata?.klingElementList, startedAt: generationStartedAt, progress: 0, videoTaskId: clientTaskId },
                     };
                     pendingChildIds = [videoId];
                     setNodes((prev) => (isEmptyVideoNode ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node)) : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode]));
@@ -2882,7 +2908,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 const answers = await Promise.all(
                     (childIds.length ? childIds : [nodeId]).map((targetNodeId) => {
                         let localStreamed = "";
-                        return requestImageQuestion(generationConfig, buildNodeChatMessages({ ...generationContext, prompt: effectivePrompt }), (text) => {
+                        return requestImageQuestion(generationConfig, buildNodeChatMessages({ ...generationContext, prompt: effectivePrompt }, { includeVideoReferences: isKimiMultimodalText }), (text) => {
                             localStreamed = text;
                             streamed = text;
                             if (isConfigNode) return;
@@ -3344,7 +3370,19 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 return;
             }
 
-            const context = hasSavedImageMetadata ? null : await hydrateNodeGenerationContext(buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, sourceNode.metadata?.prompt || node.metadata?.prompt || ""));
+            const retrySourcePrompt = sourceNode.metadata?.prompt || node.metadata?.prompt || "";
+            const isKimiMultimodalText = node.type === CanvasNodeType.Text && isKimiK3Model(generationConfig.model);
+            const context = hasSavedImageMetadata
+                ? null
+                : await hydrateNodeGenerationContext(
+                    buildNodeGenerationContext(
+                        sourceNode.id,
+                        nodesRef.current,
+                        connectionsRef.current,
+                        node.type === CanvasNodeType.Text ? buildCanvasTextCreativePrompt(sourceNode.metadata?.textCreativeMode || node.metadata?.textCreativeMode, retrySourcePrompt) : retrySourcePrompt,
+                    ),
+                    { includeVideoDataUrls: isKimiMultimodalText },
+                );
             const prompt = (isPanorama ? savedImageMetadata?.panoramaFinalPrompt || "" : savedImageMetadata?.prompt || context?.prompt || "").trim();
             const requestPrompt = isPanorama ? prompt : applyCameraPrompt(prompt, savedImageMetadata?.cameraControl || node.metadata?.cameraControl);
             if (!prompt) {
@@ -3373,11 +3411,11 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 if (node.type === CanvasNodeType.Text) {
                     if (!context) return;
                     let streamed = "";
-                    const answer = await requestImageQuestion(generationConfig, buildNodeChatMessages({ ...context, prompt }), (text) => {
+                    const answer = await requestImageQuestion(generationConfig, buildNodeChatMessages({ ...context, prompt }, { includeVideoReferences: isKimiMultimodalText }), (text) => {
                         streamed = text;
                         setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, type: CanvasNodeType.Text, metadata: { ...item.metadata, content: text, status: NODE_STATUS_LOADING } } : item)));
                     });
-                    setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, type: CanvasNodeType.Text, metadata: { ...item.metadata, content: answer || streamed, prompt, status: NODE_STATUS_SUCCESS } } : item)));
+                    setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, type: CanvasNodeType.Text, metadata: { ...item.metadata, content: answer || streamed, prompt: retrySourcePrompt, status: NODE_STATUS_SUCCESS } } : item)));
                     return;
                 }
                 if (node.type === CanvasNodeType.Video) {
@@ -3678,6 +3716,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                         {connectingParams ? <ActiveConnectionPath node={nodeById.get(connectingParams.nodeId)} handle={connectingParams} mouseWorld={mouseWorld} target={connectionTargetNodeId ? nodeById.get(connectionTargetNodeId) : undefined} /> : null}
                     </svg>
 
+                    {!nodes.length && !nodeCreatePosition ? <CanvasStartHint /> : null}
                     {visibleNodes.map((node) => (
                         <CanvasNode
                             key={node.id}
@@ -3864,9 +3903,6 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     onAddVideo={() => createNode(CanvasNodeType.Video)}
                     onAddAudio={() => createNode(CanvasNodeType.Audio)}
                     onAddText={() => createNode(CanvasNodeType.Text)}
-                    onAddPanorama={() => createNode(CanvasNodeType.Panorama)}
-                    onAddDirector={() => createNode(CanvasNodeType.Director)}
-                    onAddConfig={() => createNode(CanvasNodeType.Config)}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
                     onUpload={() => handleUploadRequest()}
@@ -4399,10 +4435,18 @@ function referenceUrl(image: ReferenceImage) {
     return image.storageKey || image.url || (!image.dataUrl.startsWith("data:") ? image.dataUrl : undefined);
 }
 
-function withCanvasVideoAdvancedConfig(config: AiConfig, context: Pick<NodeGenerationContext, "videoMultiPrompt" | "videoElementList">): AiConfig {
+function withCanvasVideoAdvancedConfig(config: AiConfig, context: Pick<NodeGenerationContext, "videoMultiPrompt" | "videoElementList" | "h3FullReference">): AiConfig {
     const kieKlingV3 = isKIEKlingV3Config(config, config.model || config.videoModel);
     return {
         ...config,
+        ...(context.h3FullReference
+            ? {
+                model: MINIMAX_H3_REFERENCE_TO_VIDEO_MODEL,
+                videoModel: MINIMAX_H3_REFERENCE_TO_VIDEO_MODEL,
+                videoChannelId: MINIMAX_H3_REF2VA_CHANNEL_ID,
+                activeChannelId: MINIMAX_H3_REF2VA_CHANNEL_ID,
+            }
+            : {}),
         videoNegativePrompt: kieKlingV3 ? "" : config.videoNegativePrompt,
         videoShotType: kieKlingV3 ? "intelligence" : config.videoShotType,
         videoMultiPrompt: context.videoMultiPrompt.length ? context.videoMultiPrompt : config.videoMultiPrompt,

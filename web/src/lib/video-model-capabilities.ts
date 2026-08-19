@@ -15,6 +15,8 @@ export function supportsVideoFrameReferences(modelName: string) {
         model === "kling-v2-1-pro" ||
         model === "kling-v2-5-turbo-image-to-video-pro" ||
         model === "minimax-h3-image-to-video" ||
+        model === "minimax-h3-text-to-video" ||
+        model === "minimax-h3-reference-to-video" ||
         model === "minimax-h3" ||
         model.includes("doubao-seedance-2-0") ||
         model.includes("doubao-seedance-1-5") ||
@@ -29,6 +31,11 @@ export function supportsVideoFrameReferences(modelName: string) {
     );
 }
 
+export function supportsMiniMaxH3FullReferences(modelName: string) {
+    const model = modelKey(modelName);
+    return model === "minimax-h3" || model.startsWith("minimax-h3-");
+}
+
 export function supportsVideoAudioGeneration(modelName: string) {
     const model = modelKey(modelName);
     if (model.includes("motion-control")) return false;
@@ -37,6 +44,8 @@ export function supportsVideoAudioGeneration(modelName: string) {
         model === "kling-2-6-image-to-video" ||
         model === "kling-text-to-video" ||
         model === "kling-image-to-video" ||
+        model === "minimax-h3" ||
+        model.startsWith("minimax-h3-") ||
         model === "bytedance-seedance-2" ||
         model === "bytedance-seedance-2-fast" ||
         model === "bytedance-seedance-2-mini" ||

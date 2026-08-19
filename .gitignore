@@ -1,6 +1,7 @@
 .next/
 out/
 node_modules/
+/.runtime/
 .env*
 !.env.example
 data/

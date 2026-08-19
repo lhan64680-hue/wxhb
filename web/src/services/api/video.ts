@@ -32,6 +32,9 @@ export class VideoRequestError extends Error {
 
 function usesAccountProxy(config: AiConfig) {
     const token = useUserStore.getState().token;
+    // H3 的多媒体参考可能携带较大的本地素材，直接提交给本机适配器可避免
+    // 经过账号代理的请求体限制，也不会消耗代理流量。
+    if (isMiniMaxH3LocalVideoConfig(config, config.model || config.videoModel)) return false;
     return config.channelMode === "remote" || (config.channelMode === "local" && Boolean(token));
 }
 
@@ -53,6 +56,12 @@ function aiVideoPollUrl(config: AiConfig, model: string, id: string) {
     return `${baseUrl}/agnesapi?video_id=${encodeURIComponent(id)}&model_name=${encodeURIComponent(model)}`;
 }
 
+function aiVideoContentUrl(config: AiConfig, model: string, id: string) {
+    const scopedConfig = { ...config, model, videoModel: model };
+    const channel = localChannelForActiveModel(scopedConfig);
+    return buildApiUrl(channel?.baseUrl || config.baseUrl, `/videos/${encodeURIComponent(id)}/content`);
+}
+
 function agnesBaseUrl(baseUrl: string) {
     const normalized = baseUrl.trim().replace(/\/+$/, "");
     return normalized.toLowerCase().endsWith("/v1") ? normalized.slice(0, -3).replace(/\/+$/, "") : normalized;
@@ -60,6 +69,9 @@ function agnesBaseUrl(baseUrl: string) {
 
 function aiHeaders(config: AiConfig) {
     const token = useUserStore.getState().token;
+    if (isMiniMaxH3LocalVideoConfig(config, config.model || config.videoModel)) {
+        return { Authorization: `Bearer ${localChannelForActiveModel(config)?.apiKey || config.apiKey}` };
+    }
     if (config.channelMode === "remote" && !token) throw new Error("请先登录后再使用云端渠道");
     if (config.channelMode === "remote") return { Authorization: `Bearer ${token}`, ...(channelIdForActiveModel(config) ? { "X-Model-Channel-ID": channelIdForActiveModel(config) } : {}) };
     if (token) return { Authorization: `Bearer ${token}`, ...(channelIdForActiveModel(config) ? { "X-User-Model-Channel-ID": channelIdForActiveModel(config) } : {}) };
@@ -128,7 +140,7 @@ export async function pollCreatedVideoGenerationTask(config: AiConfig, task: Vid
             }
             await new Promise((resolve) => setTimeout(resolve, VIDEO_POLL_INTERVAL_MS));
         }
-        const videoUrl = completed?.video_url || completed?.url || "";
+        const videoUrl = completed?.video_url || completed?.url || (isMiniMaxH3LocalVideoConfig(config, model) ? aiVideoContentUrl(config, model, pollId) : "");
         if (!videoUrl) throw new VideoRequestError("视频生成完成但没有返回视频地址", completed);
         const result = buildVideoGenerationResult(completed, videoUrl, Date.now() - startedAt);
         void writeVideoAICallLog(config, model, "/videos", "POST", startedAt, 200, stringifyLogPayload(requestBody ? summarizeVideoRequestBody(requestBody) : { taskId: pollId }), stringifyLogPayload({ task: completed, video: result }), "");
@@ -165,6 +177,9 @@ export async function deleteVideoGenerationTask(config: AiConfig, task?: VideoRe
 
 async function createVideoRequestBody(config: AiConfig, model: string, prompt: string, input: Required<VideoReferenceInput>) {
     const size = normalizeVideoSize(config.size);
+    if (isMiniMaxH3LocalVideoConfig(config, model)) {
+        return createMiniMaxH3VideoRequestBody(config, model, prompt, input);
+    }
     if (isAgnesVideoModel(model)) {
         const references = input.references;
         const inputReferences = await Promise.all(references.slice(0, 7).map(imageToAgnesReference));
@@ -236,6 +251,107 @@ async function createVideoRequestBody(config: AiConfig, model: string, prompt: s
     const audioFiles = kling ? [] : await Promise.all(input.audioReferences.map(mediaReferenceToFormValue));
     audioFiles.forEach((file) => body.append("audio_reference[]", file));
     return body;
+}
+
+type MiniMaxH3Condition = { type: "image" | "video" | "audio"; uri: string; role: "keyframe" | "reference"; frame_index?: number };
+
+async function createMiniMaxH3VideoRequestBody(config: AiConfig, model: string, prompt: string, input: Required<VideoReferenceInput>) {
+    const referenceMode = isMiniMaxH3ReferenceModel(model) || input.videoReferences.length > 0 || input.audioReferences.length > 0;
+    const conditions: MiniMaxH3Condition[] = [];
+
+    if (referenceMode) {
+        for (const image of input.references.slice(0, 9)) conditions.push({ type: "image", uri: await imageReferenceToMiniMaxH3URI(image), role: "reference" });
+        for (const video of input.videoReferences.slice(0, 3)) conditions.push({ type: "video", uri: await mediaReferenceToMiniMaxH3URI(video), role: "reference" });
+        for (const audio of input.audioReferences.slice(0, 3)) conditions.push({ type: "audio", uri: await mediaReferenceToMiniMaxH3URI(audio), role: "reference" });
+    } else {
+        if (input.firstFrame) conditions.push({ type: "image", uri: await imageReferenceToMiniMaxH3URI(input.firstFrame), role: "keyframe", frame_index: 0 });
+        if (input.lastFrame) conditions.push({ type: "image", uri: await imageReferenceToMiniMaxH3URI(input.lastFrame), role: "keyframe", frame_index: -1 });
+        if (!conditions.length) {
+            const frameReferences = input.references.slice(0, 2);
+            for (const [index, image] of frameReferences.entries()) {
+                conditions.push({ type: "image", uri: await imageReferenceToMiniMaxH3URI(image), role: "keyframe", frame_index: index === 0 ? 0 : -1 });
+            }
+        }
+    }
+
+    const hasKeyframes = conditions.some((condition) => condition.role === "keyframe");
+    return {
+        model: "MiniMaxAI/MiniMax-H3",
+        prompt,
+        seconds: normalizeMiniMaxH3Seconds(config.videoSeconds),
+        task: referenceMode ? "ref2va" : hasKeyframes ? "fl2va" : "t2va",
+        conditions,
+        target: {
+            short_edge: 768,
+            aspect_ratio: hasKeyframes ? "auto" : normalizeMiniMaxH3AspectRatio(config.size),
+            duration_seconds: normalizeMiniMaxH3Seconds(config.videoSeconds),
+        },
+        num_outputs_per_prompt: 1,
+        seed: 0,
+    };
+}
+
+function isMiniMaxH3LocalVideoConfig(config: AiConfig, model: string) {
+    const key = modelKey(model);
+    if (key !== "minimax-h3" && !key.startsWith("minimax-h3-")) return false;
+    const channelText = videoChannelText(config, model);
+    return channelText.includes("local-minimax-h3") || channelText.includes("minimax h3") || channelText.includes("minimax-h3") || channelText.includes("127.0.0.1:7860") || channelText.includes("localhost:7860") || channelText.includes("127.0.0.1:30010") || channelText.includes("127.0.0.1:30011") || channelText.includes("localhost:30010") || channelText.includes("localhost:30011");
+}
+
+function isMiniMaxH3ReferenceModel(model: string) {
+    return modelKey(model).includes("reference-to-video");
+}
+
+async function imageReferenceToMiniMaxH3URI(image: ReferenceImage) {
+    const resolvedUrl = await resolveImageUrl(image.storageKey, "");
+    for (const url of [image.url, resolvedUrl, image.dataUrl]) {
+        const publicUrl = publicHttpUrl(url);
+        if (publicUrl) return publicUrl;
+        if (url?.startsWith("data:image/")) return url;
+    }
+    return imageToDataUrl(image);
+}
+
+async function mediaReferenceToMiniMaxH3URI(media: ReferenceVideo | ReferenceAudio) {
+    const resolvedUrl = await resolveMediaUrl(media.storageKey, media.url);
+    const publicUrl = publicHttpUrl(resolvedUrl) || publicHttpUrl(media.url);
+    if (publicUrl) return publicUrl;
+    if (resolvedUrl.startsWith("data:")) return resolvedUrl;
+    return mediaUrlToDataUrl(resolvedUrl || media.url, media.type || "application/octet-stream");
+}
+
+async function mediaUrlToDataUrl(url: string, fallbackType: string) {
+    if (!url) throw new Error("参考媒体没有可读取的地址");
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`参考媒体读取失败：${response.status}`);
+    const blob = await response.blob();
+    return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error || new Error("参考媒体读取失败"));
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.readAsDataURL(blob.type ? blob : new Blob([blob], { type: fallbackType }));
+    });
+}
+
+function normalizeMiniMaxH3Seconds(value: string) {
+    const seconds = Math.floor(Number(value) || 5);
+    return Math.max(4, Math.min(15, seconds));
+}
+
+function normalizeMiniMaxH3AspectRatio(value: string) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"].includes(normalized)) return normalized;
+    const match = normalized.match(/^(\d+)x(\d+)$/);
+    if (!match) return "16:9";
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (!width || !height) return "16:9";
+    const divisor = gcd(width, height);
+    return `${width / divisor}:${height / divisor}`;
+}
+
+function gcd(a: number, b: number): number {
+    return b ? gcd(b, a % b) : Math.abs(a) || 1;
 }
 
 function isAPIMartKlingV26VideoConfig(config: AiConfig, model: string) {
@@ -495,10 +611,15 @@ function unwrapVideoResponse(payload: ApiVideoResponse): VideoResponse {
         if (!payload.data || Array.isArray(payload.data)) throw new Error("接口没有返回视频任务");
         return normalizeVideoResponse(payload.data);
     }
+    const normalized = normalizeVideoResponse(payload);
+    // A completed request may legitimately carry an error object together with
+    // `status: failed`. Return it so canvas polling can change the node from
+    // loading to error instead of swallowing it and polling forever.
+    if (isFailedVideoStatus(normalized.status)) return normalized;
     const error = videoPayloadErrorMessage(payload);
     if (error) throw new VideoRequestError(error, payload);
     if (payload.error?.message) throw new VideoRequestError(payload.error.message, payload);
-    return normalizeVideoResponse(payload);
+    return normalized;
 }
 
 function isVideoEnvelope(payload: ApiVideoResponse): payload is ApiVideoEnvelope {
@@ -584,8 +705,8 @@ function redactLogMedia(value: unknown) {
     const record = value as Record<string, unknown>;
     for (const key of Object.keys(record)) {
         const item = record[key];
-        if (typeof item === "string" && (item.startsWith("data:image/") || item.includes("data:image/") || item.length > 2048 && looksLikeBase64(item))) {
-            record[key] = `[redacted image/string len=${item.length}]`;
+        if (typeof item === "string" && (item.startsWith("data:image/") || item.startsWith("data:video/") || item.startsWith("data:audio/") || item.includes("data:image/") || item.includes("data:video/") || item.includes("data:audio/") || item.length > 2048 && looksLikeBase64(item))) {
+            record[key] = `[redacted media/string len=${item.length}]`;
             continue;
         }
         redactLogMedia(item);

@@ -9,7 +9,7 @@ import { fetchUserConfig, measureUserStorageProvider, syncUserModelConfig, syncU
 import { clearStorageConfigCache as clearFileStorageCache } from "@/services/file-storage";
 import { clearStorageConfigCache as clearImageStorageCache, defaultUserStorageProvider, defaultUserWebDAVStorageProvider, loadStorageConfig, loadUserS3StorageProvider, loadUserWebDAVStorageProvider, saveUserStorageProvider, saveUserWebDAVStorageProvider, type UserStorageProvider } from "@/services/image-storage";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
-import { filterModelsByCapability, normalizeLocalChannels, useConfigStore, useEffectiveConfig, type AiConfig, type LocalModelChannel, type ModelCapability } from "@/stores/use-config-store";
+import { filterModelsByCapability, GRSAI_GPT_IMAGE_2_CHANNEL_ID, KIMI_K3_CHANNEL_ID, normalizeLocalChannels, useConfigStore, useEffectiveConfig, type AiConfig, type LocalModelChannel, type ModelCapability } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 type ModelGroup = {
@@ -323,7 +323,13 @@ export function AppConfigModal() {
                                                 </Button>
                                             </div>
                                         </div>
-                                        <div className="text-xs text-stone-500">已保存 {channel.models.length} 个模型</div>
+                                        <div className="text-xs text-stone-500">
+                                            {channel.id === GRSAI_GPT_IMAGE_2_CHANNEL_ID
+                                                ? "填写 GRS AI API Key 后即可通过国内节点使用图片生成。"
+                                                : channel.id === KIMI_K3_CHANNEL_ID
+                                                    ? "填写 Moonshot API Key 后，文本节点会由本机后端直连 Kimi K3；可理解文字、图片和视频参考。"
+                                                    : `已保存 ${channel.models.length} 个模型`}
+                                        </div>
                                     </div>
                                 ))}
                             </div>

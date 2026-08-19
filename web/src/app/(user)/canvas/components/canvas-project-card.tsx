@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Download, Pencil, Trash2, X } from "lucide-react";
+import { ArrowUpRight, Check, Download, Pencil, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button, Input } from "antd";
 
@@ -28,14 +28,15 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     };
 
     return (
-        <article className="group flex min-h-44 cursor-pointer flex-col justify-between rounded-2xl bg-[#f1eee8] p-5 transition hover:bg-[#ebe6dc] dark:bg-white/5 dark:hover:bg-white/10" onClick={() => !editing && open()}>
+        <article className="group relative flex min-h-48 cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-white/[.035] p-5 text-stone-100 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-200/35 hover:bg-white/[.07]" onClick={() => !editing && open()}>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_15%_0%,rgba(34,211,238,.2),transparent_60%)] opacity-0 transition group-hover:opacity-100" />
             <div className="flex items-start gap-3">
                 <input
                     type="checkbox"
                     checked={selected}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => toggleSelected(project.id, event.target.checked)}
-                    className="mt-1 size-4 accent-stone-950 dark:accent-stone-100"
+                    className="mt-1 size-4 accent-cyan-300"
                     aria-label={`选择 ${project.title}`}
                 />
                 {editing ? (
@@ -50,7 +51,7 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                         }}
                     >
                         <h2 className="truncate text-xl font-semibold">{project.title}</h2>
-                        <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
+                        <p className="mt-3 text-sm leading-6 text-stone-400">
                             {project.nodes.length} 个节点 · {project.connections.length} 条连线
                         </p>
                     </button>
@@ -73,6 +74,7 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                     )}
                 </div>
             </div>
+            {!editing ? <ArrowUpRight className="pointer-events-none absolute right-5 top-5 size-4 text-stone-600 transition group-hover:text-cyan-200" /> : null}
         </article>
     );
 }

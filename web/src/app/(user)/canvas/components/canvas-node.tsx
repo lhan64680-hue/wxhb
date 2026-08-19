@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { ChevronRight, Image as ImageIcon, Music2, RefreshCw, Star, Video } from "lucide-react";
+import { ChevronRight, FileText, Image as ImageIcon, Music2, RefreshCw, Star, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes, formatDuration } from "@/lib/image-utils";
@@ -11,6 +11,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "../types";
 import { isCanvasImageNodeType } from "../utils/canvas-panorama";
+import { canvasTextCreativeOptions } from "../utils/canvas-text-creative";
 import type { CanvasResourceReference } from "../utils/canvas-resource-references";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -421,8 +422,8 @@ export const CanvasNode = React.memo(function CanvasNode({
 
             {!isGroup ? (
                 <>
-                    <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
-                    <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
+                    <ConnectionHandleDot side="left" visible onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
+                    <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
                 </>
             ) : null}
 
@@ -580,9 +581,28 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     style={textStyle}
                     onWheel={(event) => event.stopPropagation()}
                 >
-                    {node.metadata?.content || <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>}
+                    {node.metadata?.content || (node.metadata?.textCreativeMode ? <TextCreativeEmptyState theme={theme} /> : <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>)}
                 </div>
             )}
+        </div>
+    );
+}
+
+function TextCreativeEmptyState({ theme }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="flex h-full min-h-0 flex-col justify-center gap-3 pr-2 font-sans" style={{ color: theme.node.text }}>
+            <div className="flex items-center gap-2 text-sm font-semibold">
+                <FileText className="size-4" />
+                Kimi K3 多模态文本
+            </div>
+            <div className="text-xs leading-5 opacity-60">点击节点打开创作面板；可连接图片或视频作为参考。</div>
+            <div className="grid grid-cols-2 gap-1.5">
+                {canvasTextCreativeOptions.map((option) => (
+                    <span key={option.value} className="rounded-lg border px-2 py-1.5 text-[11px]" style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel }}>
+                        {option.description}
+                    </span>
+                ))}
+            </div>
         </div>
     );
 }
@@ -773,11 +793,13 @@ function ImageInfoBar({ node }: { node: CanvasNodeData }) {
     const width = Math.round(node.metadata?.naturalWidth || node.width);
     const height = Math.round(node.metadata?.naturalHeight || node.height);
     const size = formatBytes(node.metadata?.bytes || 0);
+    const duration = node.metadata?.durationMs ? formatDuration(node.metadata.durationMs) : "";
     return (
         <div className="pointer-events-none absolute bottom-3 right-3 z-40 max-w-[calc(100%-24px)]">
             <span className="max-w-full truncate rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium leading-none text-white backdrop-blur-sm">
                 {width} x {height}
                 {size ? ` · ${size}` : ""}
+                {duration ? ` · ${duration}` : ""}
             </span>
         </div>
     );

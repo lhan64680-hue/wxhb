@@ -23,6 +23,7 @@ export enum CanvasNodeType {
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
+export type CanvasTextCreativeMode = "write" | "video-prompt" | "image-reverse-prompt" | "music-prompt";
 
 export type CameraControlOptions = {
     enabled: boolean;
@@ -41,6 +42,7 @@ export type CanvasNodeMetadata = {
     status?: CanvasNodeStatus;
     errorDetails?: string;
     fontSize?: number;
+    textCreativeMode?: CanvasTextCreativeMode;
     generationMode?: CanvasGenerationMode;
     generationType?: CanvasImageGenerationType;
     model?: string;
@@ -83,6 +85,8 @@ export type CanvasNodeMetadata = {
     videoTaskVideoId?: string;
     firstFrameNodeId?: string;
     lastFrameNodeId?: string;
+    h3ReferenceMode?: "frames" | "full";
+    h3ReferenceNodeIds?: string[];
     multiShot?: string;
     shotType?: string;
     klingImageNodeIds?: string[];

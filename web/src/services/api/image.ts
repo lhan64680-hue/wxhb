@@ -2,14 +2,14 @@ import axios from "axios";
 
 import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl, resolveImageUrl } from "@/services/image-storage";
-import { buildApiUrl, channelIdForActiveModel, localChannelForActiveModel, type AiConfig } from "@/stores/use-config-store";
+import { buildApiUrl, channelIdForActiveModel, KIMI_K3_CHANNEL_ID, localChannelForActiveModel, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import { nanoid } from "nanoid";
 
 export type ChatCompletionMessage = {
     role: "system" | "user" | "assistant";
-    content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+    content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } } | { type: "video_url"; video_url: { url: string } }>;
 };
 
 type ImageApiResponse = {
@@ -17,6 +17,22 @@ type ImageApiResponse = {
     error?: { message?: string };
     code?: number;
     msg?: string;
+};
+
+type GrsaiDrawTask = {
+    id?: string;
+    status?: string;
+    progress?: number;
+    url?: string;
+    results?: Array<Record<string, unknown>>;
+    error?: string;
+    failure_reason?: string;
+};
+
+type GrsaiDrawResponse = {
+    code?: number;
+    msg?: string;
+    data?: GrsaiDrawTask;
 };
 
 type ResponsesApiResponse = {
@@ -94,6 +110,7 @@ const QUALITY_ALIASES: Record<string, string> = {
 };
 const IMAGE_MIME = "image/png";
 const IMAGE_REQUEST_TIMEOUT_SECONDS = 600;
+const GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS = 120;
 const PROMPT_REWRITE_GUARD_PREFIX = "Use the following text as the complete prompt. Do not rewrite it:";
 
 function normalizeQuality(quality: string) {
@@ -148,6 +165,211 @@ function createImageRequestParams(config: AiConfig): ImageRequestParams {
         timeoutSeconds: IMAGE_REQUEST_TIMEOUT_SECONDS,
         streamPartialImages: normalizeBoundedInteger(config.streamPartialImages, 1, 0, 3),
     };
+}
+
+function isGrsaiImageChannel(config: AiConfig) {
+    const baseUrl = (localChannelForActiveModel(config)?.baseUrl || config.baseUrl).toLowerCase();
+    return baseUrl.includes("grsaiapi.com") || baseUrl.includes("grsai.dakka.com.cn");
+}
+
+function isBrowserDirectLocalChannel(config: AiConfig) {
+    return isGrsaiImageChannel(config);
+}
+
+/** Kimi keys stay on the local machine: browser -> local Go relay -> Moonshot. */
+function isLocalKimiRelay(config: AiConfig) {
+    if (config.channelMode !== "local") return false;
+
+    const channel = localChannelForActiveModel(config);
+    const baseUrl = (channel?.baseUrl || config.baseUrl || "").toLowerCase();
+    return channel?.id === KIMI_K3_CHANNEL_ID || baseUrl.includes("api.moonshot.cn");
+}
+
+function createGrsaiDrawBody(config: AiConfig, prompt: string, urls: string[] = []) {
+    const body: Record<string, unknown> = {
+        model: config.model,
+        prompt: withPromptGuard(config, withSystemPrompt(config, prompt)),
+        urls,
+        aspectRatio: resolveRequestSize(normalizeQuality(config.quality), config.size) || "1024x1024",
+    };
+    return body;
+}
+
+function grsaiDirectApiUrl(config: AiConfig, path: string) {
+    const channel = localChannelForActiveModel(config);
+    return buildApiUrl(channel?.baseUrl || config.baseUrl, path);
+}
+
+function grsaiDirectHeaders(config: AiConfig) {
+    const channel = localChannelForActiveModel(config);
+    return { Authorization: `Bearer ${channel?.apiKey || config.apiKey}`, "Content-Type": "application/json" };
+}
+
+function normalizeGrsaiDrawResponse(value: unknown): GrsaiDrawResponse {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new ImageRequestError("GRS 图像接口没有返回可识别的任务信息", value);
+    }
+    const payload = value as Record<string, unknown>;
+    // GRS 的 SSE 模式会直接把任务对象放在 data: 后，而非再包一层 { data: ... }。
+    if (typeof payload.id === "string" && payload.id) {
+        return { code: 0, data: payload as GrsaiDrawTask };
+    }
+    return payload as GrsaiDrawResponse;
+}
+
+function findGrsaiSsePayload(text: string) {
+    let latestPayload: unknown;
+    for (const block of text.split(/\r?\n\r?\n/)) {
+        const eventData = block
+            .split(/\r?\n/)
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.slice(5).replace(/^ /, ""))
+            .join("\n")
+            .trim();
+        if (!eventData || eventData === "[DONE]") continue;
+        try {
+            latestPayload = JSON.parse(eventData);
+        } catch {
+            // 分块传输时 JSON 可能尚未接收完整，继续读取下一块。
+        }
+    }
+    return latestPayload;
+}
+
+function parseGrsaiDrawResponseText(text: string): GrsaiDrawResponse {
+    const content = text.trim();
+    if (!content) throw new ImageRequestError("GRS 图像接口返回为空");
+
+    try {
+        return normalizeGrsaiDrawResponse(JSON.parse(content));
+    } catch (jsonError) {
+        const eventPayload = findGrsaiSsePayload(content);
+        if (eventPayload !== undefined) return normalizeGrsaiDrawResponse(eventPayload);
+        throw new ImageRequestError(
+            jsonError instanceof Error ? `GRS 图像响应解析失败：${jsonError.message}` : "GRS 图像响应解析失败",
+            content.slice(0, 2000),
+        );
+    }
+}
+
+async function readGrsaiDrawResponse(response: Response, timeoutSeconds = 20) {
+    if (!response.body) return parseGrsaiDrawResponseText(await response.text());
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let content = "";
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        void reader.cancel();
+    }, timeoutSeconds * 1000);
+
+    try {
+        while (true) {
+            const { value, done } = await reader.read();
+            if (timedOut) throw new ImageRequestError(`GRS 图像接口 ${timeoutSeconds} 秒内未返回任务信息`);
+            if (value) {
+                content += decoder.decode(value, { stream: true });
+                // 创建和查询接口都可能保持 SSE 连接。得到首个完整事件就停止读取，
+                // 随后立即进入 /draw/result 轮询，不能等上游主动关闭连接。
+                const eventPayload = findGrsaiSsePayload(content);
+                if (eventPayload !== undefined) return normalizeGrsaiDrawResponse(eventPayload);
+            }
+            if (done) return parseGrsaiDrawResponseText(content + decoder.decode());
+        }
+    } finally {
+        window.clearTimeout(timeoutId);
+        void reader.cancel().catch(() => undefined);
+    }
+}
+
+function readGrsaiDrawTask(payload: GrsaiDrawResponse) {
+    if (typeof payload.code === "number" && payload.code !== 0) {
+        throw new ImageRequestError(payload.msg || "GRS 图像任务创建失败", payload);
+    }
+    if (!payload.data || typeof payload.data !== "object") {
+        throw new ImageRequestError("GRS 图像接口没有返回任务信息", payload);
+    }
+    return payload.data;
+}
+
+function parseGrsaiDrawImages(task: GrsaiDrawTask, mime: string) {
+    const data = task.results || (task.url ? [{ url: task.url }] : []);
+    return parseImagePayload({ data }, mime);
+}
+
+function grsaiDrawFailureMessage(task: GrsaiDrawTask) {
+    return task.failure_reason || task.error || "GRS 图像任务失败";
+}
+
+async function requestGrsaiDrawImages(config: AiConfig, prompt: string, references: ReferenceImage[]) {
+    const mime = IMAGE_MIME;
+    const urls = await Promise.all(references.map((image) => imageToDataUrl(image)));
+    if (references.length && urls.some((url) => !url)) throw new ImageRequestError("参考图读取失败，请重新上传后再试");
+    const body = createGrsaiDrawBody(config, prompt, urls);
+    const deadline = Date.now() + GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS * 1000;
+
+    return requestAndParseImages(
+        config,
+        "/draw/completions",
+        body,
+        GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS,
+        () =>
+            requestWithTransientRetry(
+                () =>
+                    withTimeout(Math.min(20, GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS), (signal) =>
+                        fetch(grsaiDirectApiUrl(config, "/draw/completions"), {
+                            method: "POST",
+                            headers: grsaiDirectHeaders(config),
+                            body: JSON.stringify(body),
+                            signal,
+                        }),
+                    ),
+                0,
+            ),
+        async (response) => {
+            const createdPayload = await readGrsaiDrawResponse(response);
+            let task = readGrsaiDrawTask(createdPayload);
+            const initialStatus = (task.status || "").toLowerCase();
+            if (["succeeded", "success", "completed", "done"].includes(initialStatus)) {
+                return { images: parseGrsaiDrawImages(task, mime), responseBody: stringifyLogPayload(createdPayload) };
+            }
+            if (["failed", "fail", "error", "cancelled", "canceled"].includes(initialStatus)) {
+                throw new ImageRequestError(grsaiDrawFailureMessage(task), createdPayload);
+            }
+            if (!task.id) throw new ImageRequestError("GRS 图像任务没有返回任务 ID", createdPayload);
+
+            let resultPayload: GrsaiDrawResponse = createdPayload;
+            while (Date.now() < deadline) {
+                await new Promise((resolve) => window.setTimeout(resolve, 1500));
+                const remainingSeconds = Math.max(1, Math.ceil((deadline - Date.now()) / 1000));
+                const resultResponse = await withTimeout(
+                    Math.min(10, remainingSeconds),
+                    (signal) =>
+                        fetch(grsaiDirectApiUrl(config, "/draw/result"), {
+                            method: "POST",
+                            headers: grsaiDirectHeaders(config),
+                            body: JSON.stringify({ id: task.id }),
+                            signal,
+                        }),
+                );
+                if (!resultResponse.ok) {
+                    const error = await fetchErrorDetail(resultResponse, "读取 GRS 图像任务失败");
+                    throw new ImageRequestError(error.message, error.detail);
+                }
+                resultPayload = await readGrsaiDrawResponse(resultResponse);
+                task = readGrsaiDrawTask(resultPayload);
+                const status = (task.status || "").toLowerCase();
+                if (["succeeded", "success", "completed", "done"].includes(status)) {
+                    return { images: parseGrsaiDrawImages(task, mime), responseBody: stringifyLogPayload(resultPayload) };
+                }
+                if (["failed", "fail", "error", "cancelled", "canceled"].includes(status)) {
+                    throw new ImageRequestError(grsaiDrawFailureMessage(task), resultPayload);
+                }
+            }
+            throw new ImageRequestError(`请求超时：超过 ${GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS} 秒仍未完成，请稍后重试。`, resultPayload);
+        },
+    );
 }
 
 function normalizeBase64Image(value: string, fallbackMime: string) {
@@ -432,10 +654,14 @@ function withPromptGuard(config: AiConfig, prompt: string) {
 
 function usesAccountProxy(config: AiConfig) {
     const token = useUserStore.getState().token;
+    // GRS GPT Image 2 必须浏览器直连国内节点；旧配置可能仍保留 remote 标记，
+    // 也不能让它误入账号代理后创建一个永不完成的本地任务。
+    if (isLocalKimiRelay(config) || isBrowserDirectLocalChannel(config)) return false;
     return config.channelMode === "remote" || (config.channelMode === "local" && Boolean(token));
 }
 
 export function aiApiUrl(config: AiConfig, path: string) {
+    if (isLocalKimiRelay(config)) return `/api/local-ai/kimi${path}`;
     if (usesAccountProxy(config)) return `/api/v1${path}`;
     const channel = localChannelForActiveModel(config);
     return buildApiUrl(channel?.baseUrl || config.baseUrl, path);
@@ -444,6 +670,14 @@ export function aiApiUrl(config: AiConfig, path: string) {
 export function aiHeaders(config: AiConfig, contentType?: string) {
     const token = useUserStore.getState().token;
     if (config.channelMode === "remote" && !token) throw new Error("请先登录后再使用云端渠道");
+    if (isLocalKimiRelay(config)) {
+        const channel = localChannelForActiveModel(config);
+        return {
+            "X-Local-Kimi-Base-URL": channel?.baseUrl || config.baseUrl,
+            "X-Local-Kimi-API-Key": channel?.apiKey || config.apiKey,
+            ...(contentType ? { "Content-Type": contentType } : {}),
+        };
+    }
     if (config.channelMode === "remote") {
         return {
             Authorization: `Bearer ${token}`,
@@ -451,7 +685,7 @@ export function aiHeaders(config: AiConfig, contentType?: string) {
             ...(contentType ? { "Content-Type": contentType } : {}),
         };
     }
-    if (token) {
+    if (token && !isBrowserDirectLocalChannel(config)) {
         const userChannelId = channelIdForActiveModel(config);
         return {
             Authorization: `Bearer ${token}`,
@@ -554,6 +788,10 @@ function withSystemMessage(config: AiConfig, messages: ChatCompletionMessage[]) 
 async function requestImageGenerationSingle(config: AiConfig & { seedIndex?: number; seedCount?: number }, prompt: string, params: ImageRequestParams): Promise<GeneratedImage[]> {
     const mime = IMAGE_MIME;
 
+    if (isGrsaiImageChannel(config)) {
+        return requestGrsaiDrawImages(config, prompt, []);
+    }
+
     // 针对 Agnes 渠道文生图模型定制精简 Payload，避免传入官方文档未声明的 seed 参数。
     if (isAgnesImageModel(config.model)) {
         const body: Record<string, unknown> = {
@@ -632,6 +870,9 @@ async function requestImageGenerationSingle(config: AiConfig & { seedIndex?: num
 
 async function requestImageEditSingle(config: AiConfig, prompt: string, references: ReferenceImage[], params: ImageRequestParams): Promise<GeneratedImage[]> {
     const mime = IMAGE_MIME;
+    if (isGrsaiImageChannel(config)) {
+        return requestGrsaiDrawImages(config, prompt, references);
+    }
     const formData = new FormData();
     formData.set("model", config.model);
     formData.set("prompt", withPromptGuard(config, withSystemPrompt(config, prompt)));
@@ -872,6 +1113,14 @@ async function createCanvasImageTaskRequest(config: AiConfig & { seedIndex?: num
             method: "POST",
             headers: jsonHeaders,
             body: JSON.stringify({ endpoint: "/images/generations", ...meta, request: body }),
+        };
+    }
+    if (isGrsaiImageChannel(config)) {
+        const body = createGrsaiDrawBody(config, prompt, references.length ? await Promise.all(references.map((image) => imageToDataUrl(image))) : []);
+        return {
+            method: "POST",
+            headers: jsonHeaders,
+            body: JSON.stringify({ endpoint: "/draw/completions", ...meta, request: body }),
         };
     }
     if (config.apiMode === "responses") {

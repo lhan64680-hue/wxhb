@@ -31,7 +31,7 @@ export const NODE_SPECS = {
     },
     [CanvasNodeType.Text]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Text],
-        metadata: { content: "", status: "idle", fontSize: 14 },
+        metadata: { content: "", status: "idle", fontSize: 14, textCreativeMode: "write" },
     },
     [CanvasNodeType.Config]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Config],

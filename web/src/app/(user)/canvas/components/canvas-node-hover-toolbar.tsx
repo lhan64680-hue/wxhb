@@ -5,7 +5,7 @@ import { App, Modal, Segmented, Tooltip } from "antd";
 import { Download, Ellipsis, FolderPlus, Image as ImageIcon, Info, MessageSquare, Minus, Music2, Pencil, Plus, RefreshCw, Settings2, Trash2, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
-import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
+import { formatBytes, formatDuration, getDataUrlByteSize } from "@/lib/image-utils";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "../types";
@@ -243,6 +243,13 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
     const [view, setView] = useState<"info" | "json">("info");
     const imageBytes = isCanvasImageNodeType(node?.type) && node?.metadata?.content ? getDataUrlByteSize(node.metadata.content) : 0;
     const batchCount = isCanvasImageNodeType(node?.type) ? node?.metadata?.batchChildIds?.length || 0 : 0;
+    const videoGenerationDuration =
+        node?.type === CanvasNodeType.Video &&
+        typeof node.metadata?.durationMs === "number" &&
+        node.metadata.durationMs > 0 &&
+        (Boolean(node.metadata.videoTaskId) || Boolean(node.metadata.videoTaskVideoId) || Boolean(node.metadata.model))
+            ? formatDuration(node.metadata.durationMs)
+            : "";
     const json = useMemo(() => {
         if (!node) return "";
         return JSON.stringify(
@@ -292,6 +299,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             {batchCount > 1 ? <InfoRow label="图片组" value={`${batchCount} 张`} /> : null}
                             {(isPanoramaNodeType(node.type) ? node.metadata?.panoramaSourcePrompt : node.metadata?.prompt) ? <InfoRow label="提示词" value={isPanoramaNodeType(node.type) ? node.metadata?.panoramaSourcePrompt : node.metadata?.prompt} /> : null}
                             {imageBytes ? <InfoRow label="图片大小" value={formatBytes(imageBytes)} /> : null}
+                            {videoGenerationDuration ? <InfoRow label="生成耗时" value={videoGenerationDuration} /> : null}
                             {node.metadata?.errorDetails ? (
                                 <div className="rounded-lg border p-3 text-red-400" style={{ borderColor: theme.node.stroke }}>
                                     {node.metadata.errorDetails}

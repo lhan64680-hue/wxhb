@@ -161,7 +161,7 @@ func proxyAIVideoTaskRequest(w http.ResponseWriter, r *http.Request) {
 		ChannelName:     channel.Name,
 		Source:          readVideoTaskSource(r),
 		SourceID:        readVideoTaskSourceID(r),
-		ClientTaskID:     readClientVideoTaskID(r),
+		ClientTaskID:    readClientVideoTaskID(r),
 		UpstreamTaskID:  parsed.UpstreamTaskID,
 		UpstreamVideoID: parsed.UpstreamVideoID,
 		Status:          parsed.Status,
@@ -273,6 +273,10 @@ func pollVideoTaskFromUpstream(task model.VideoTask) (service.VideoTaskPollUpdat
 	}
 	transformed := transformVideoStatusPayload(payload, request, channel, task.Model)
 	parsed := parseVideoTaskPayload(transformed, task.Model)
+	if parsed.VideoURL == "" && parsed.Status == "completed" && isMiniMaxH3LocalVideoRequest(channel, task.Model) {
+		parsed.VideoURL = service.BuildModelChannelURL(channel, "/videos/"+pollID+"/content")
+		parsed.Progress = 100
+	}
 	if parsed.Status == "failed" && parsed.Error == "" {
 		parsed.Error = firstNonEmpty(parsed.ErrorDetail, "视频任务生成失败")
 	}
@@ -304,6 +308,9 @@ func normalizeVideoCreateBody(body []byte, contentType string, modelName string,
 	}
 	if isAPIMartChannel(channel, modelName) && upstreamPath == "/videos/generations" {
 		return normalizeAPIMartVideoBody(body, contentType, modelName, channel)
+	}
+	if isMiniMaxH3LocalVideoRequest(channel, modelName) && upstreamPath == "/videos" {
+		return normalizeMiniMaxH3VideoBody(body, contentType, modelName)
 	}
 	return body, contentType, nil
 }
@@ -340,6 +347,11 @@ func transformVideoStatusPayload(payload []byte, request *http.Request, channel 
 	}
 	if isAPIMartChannel(channel, modelName) && strings.Contains(request.URL.Path, "/tasks/") {
 		if transformed, ok := transformAPIMartTaskResponse(payload, modelName); ok {
+			return transformed
+		}
+	}
+	if isMiniMaxH3LocalVideoRequest(channel, modelName) && strings.Contains(request.URL.Path, "/videos/") && !strings.HasSuffix(request.URL.Path, "/content") {
+		if transformed, ok := transformMiniMaxH3StatusResponse(payload, request); ok {
 			return transformed
 		}
 	}

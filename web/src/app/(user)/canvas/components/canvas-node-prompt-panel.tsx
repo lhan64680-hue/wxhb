@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUp, LoaderCircle } from "lucide-react";
+import { ArrowUp, FileText, Image as ImageIcon, LoaderCircle, Music2, Video } from "lucide-react";
 import { Button } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -15,8 +15,9 @@ import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
 import { CanvasPromptChipInput } from "./canvas-prompt-chip-input";
 import { CanvasVideoSettingsPopover, type CanvasVideoFrameOption, type CanvasVideoResourceOption } from "./canvas-video-settings-popover";
-import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData } from "../types";
+import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasTextCreativeMode } from "../types";
 import { PANORAMA_IMAGE_SIZE, isCanvasImageNodeType, isPanoramaNodeType } from "../utils/canvas-panorama";
+import { canvasTextCreativeOptions, canvasTextCreativeLabel } from "../utils/canvas-text-creative";
 import type { CanvasResourceReference } from "../utils/canvas-resource-references";
 
 export type { CanvasVideoFrameOption };
@@ -45,6 +46,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const isPanorama = isPanoramaNodeType(node.type);
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
     const hasImageContent = isCanvasImageNodeType(node.type) && Boolean(node.metadata?.content);
+    const textCreativeMode = node.metadata?.textCreativeMode || "write";
     const sourcePrompt = isPanorama ? node.metadata?.panoramaSourcePrompt || "" : node.metadata?.prompt || "";
     const [prompt, setPrompt] = useState(sourcePrompt);
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, count: mode === "image" ? config.count : 1 });
@@ -83,8 +85,31 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 onSubmit={submit}
                 className="thin-scrollbar h-40 w-full resize-none rounded-xl px-3 py-2 text-sm leading-5 outline-none"
                 style={{ background: "transparent", color: theme.node.text }}
-                placeholder={isPanorama ? "描述想生成的全景，或上传/连接图片作为参考" : promptPlaceholder(mode, hasImageContent, hasTextContent)}
+                placeholder={isPanorama ? "描述想生成的全景，或上传/连接图片作为参考" : promptPlaceholder(mode, hasImageContent, hasTextContent, textCreativeMode)}
             />
+
+            {mode === "text" ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Kimi K3 文本创作模式">
+                    <span className="mr-1 text-xs opacity-60">Kimi K3 · {canvasTextCreativeLabel(textCreativeMode)}</span>
+                    {canvasTextCreativeOptions.map((option) => {
+                        const Icon = textCreativeModeIcon(option.value);
+                        const active = option.value === textCreativeMode;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                title={option.description}
+                                className="inline-flex h-8 items-center gap-1 rounded-full border px-2 text-xs transition"
+                                style={{ background: active ? theme.toolbar.activeBg : "transparent", borderColor: active ? theme.toolbar.activeText : theme.node.stroke, color: active ? theme.toolbar.activeText : theme.node.text }}
+                                onClick={() => onConfigChange(node.id, { textCreativeMode: option.value })}
+                            >
+                                <Icon className="size-3.5" />
+                                {option.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
 
             <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
@@ -178,11 +203,21 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
     };
 }
 
-function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: boolean, hasTextContent: boolean) {
+function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: boolean, hasTextContent: boolean, textCreativeMode: CanvasTextCreativeMode) {
     if (mode === "video") return "描述要生成的视频内容";
     if (mode === "audio") return "描述要生成的音频内容";
     if (mode === "image") return hasImageContent ? "请输入你想要把这张图修改成什么" : "描述要生成的图片内容";
-    return hasTextContent ? "请输入你想要将本段文本修改成什么" : "请输入你想要生成的文本内容";
+    if (textCreativeMode === "video-prompt") return "描述你想生成的视频，或连接图片、视频作为参考";
+    if (textCreativeMode === "image-reverse-prompt") return "连接图片后反推提示词；也可补充风格或用途";
+    if (textCreativeMode === "music-prompt") return "描述歌曲主题、情绪、风格或歌词方向";
+    return hasTextContent ? "请输入你想要将本段文本修改成什么" : "写下故事、场景、角色或创作要求";
+}
+
+function textCreativeModeIcon(mode: CanvasTextCreativeMode) {
+    if (mode === "video-prompt") return Video;
+    if (mode === "image-reverse-prompt") return ImageIcon;
+    if (mode === "music-prompt") return Music2;
+    return FileText;
 }
 
 function videoConfigPatch(key: keyof AiConfig, value: string) {

@@ -8,6 +8,7 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +19,8 @@ import (
 )
 
 const userModelChannelHeader = "X-User-Model-Channel-ID"
+const localKimiAPIKeyHeader = "X-Local-Kimi-API-Key"
+const localKimiBaseURLHeader = "X-Local-Kimi-Base-URL"
 
 func selectAIRequestChannel(user model.AuthUser, modelName string, channelID string, userChannelID string) (model.ModelChannel, string, error) {
 	userChannelID = strings.TrimSpace(userChannelID)
@@ -52,6 +55,84 @@ func AIImagesEdits(w http.ResponseWriter, r *http.Request) {
 
 func AIChatCompletions(w http.ResponseWriter, r *http.Request) {
 	proxyAIRequest(w, r, "/chat/completions")
+}
+
+// LocalKimiChatCompletions lets a single-machine install use Kimi without an
+// application account. It only accepts loopback requests and Moonshot's
+// official endpoint, so it cannot be used as a generic anonymous HTTP proxy.
+func LocalKimiChatCompletions(w http.ResponseWriter, r *http.Request) {
+	if !isLoopbackRequest(r) {
+		FailWithStatus(w, http.StatusForbidden, "仅允许本机访问 Kimi 本地通道")
+		return
+	}
+
+	apiKey := strings.TrimSpace(r.Header.Get(localKimiAPIKeyHeader))
+	baseURL, ok := normalizeLocalKimiBaseURL(r.Header.Get(localKimiBaseURLHeader))
+	if apiKey == "" || !ok {
+		FailWithStatus(w, http.StatusBadRequest, "Kimi 本地通道配置不完整")
+		return
+	}
+
+	body, contentType, modelName, err := readAIRequest(r)
+	if err != nil || !strings.EqualFold(strings.TrimSpace(modelName), "kimi-k3") {
+		FailWithStatus(w, http.StatusBadRequest, "Kimi 本地通道仅支持 kimi-k3")
+		return
+	}
+
+	request, err := http.NewRequest(http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		Fail(w, "Kimi 本地请求创建失败")
+		return
+	}
+	request.Header.Set("Authorization", "Bearer "+apiKey)
+	request.Header.Set("Content-Type", firstNonEmpty(contentType, "application/json"))
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	response, err := (&http.Client{Timeout: 600 * time.Second, Transport: transport}).Do(request)
+	if err != nil {
+		log.Printf("local Kimi request failed: %v", err)
+		Fail(w, "Kimi 本地直连失败")
+		return
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusBadRequest {
+		payload, _ := io.ReadAll(io.LimitReader(response.Body, 256*1024))
+		FailWithStatus(w, response.StatusCode, readUpstreamAIErrorMessage(payload, response.StatusCode))
+		return
+	}
+
+	for key, values := range response.Header {
+		if strings.EqualFold(key, "Content-Length") || strings.EqualFold(key, "Content-Encoding") || strings.EqualFold(key, "Transfer-Encoding") {
+			continue
+		}
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(response.StatusCode)
+	copyAIResponseBody(w, response.Body)
+}
+
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func normalizeLocalKimiBaseURL(value string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || !strings.EqualFold(parsed.Scheme, "https") || !strings.EqualFold(parsed.Hostname(), "api.moonshot.cn") {
+		return "", false
+	}
+	path := strings.TrimRight(parsed.Path, "/")
+	if path != "" && !strings.EqualFold(path, "/v1") {
+		return "", false
+	}
+	return "https://api.moonshot.cn/v1", true
 }
 
 func AIResponses(w http.ResponseWriter, r *http.Request) {
@@ -382,8 +463,8 @@ func redactLargeImages(value *any) {
 	switch typed := (*value).(type) {
 	case map[string]any:
 		for key, item := range typed {
-			if text, ok := item.(string); ok && (strings.HasPrefix(text, "data:image/") || len(text) > 2048 && looksLikeBase64(text)) {
-				typed[key] = fmt.Sprintf("[redacted image/string len=%d]", len(text))
+			if text, ok := item.(string); ok && (strings.HasPrefix(text, "data:image/") || strings.HasPrefix(text, "data:video/") || strings.HasPrefix(text, "data:audio/") || len(text) > 2048 && looksLikeBase64(text)) {
+				typed[key] = fmt.Sprintf("[redacted media/string len=%d]", len(text))
 				continue
 			}
 			redactLargeImages(&item)
