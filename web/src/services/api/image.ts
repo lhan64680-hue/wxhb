@@ -174,8 +174,8 @@ function isGrsaiImageChannel(config: AiConfig) {
     return baseUrl.includes("grsaiapi.com") || baseUrl.includes("grsai.dakka.com.cn");
 }
 
-function isBrowserDirectLocalChannel(config: AiConfig) {
-    return isGrsaiImageChannel(config);
+function isLocalGrsaiRelay(config: AiConfig) {
+	return isGrsaiImageChannel(config);
 }
 
 /** Kimi keys stay on the local machine: browser -> local Go relay -> Moonshot. */
@@ -197,14 +197,13 @@ function createGrsaiDrawBody(config: AiConfig, prompt: string, urls: string[] = 
     return body;
 }
 
-function grsaiDirectApiUrl(config: AiConfig, path: string) {
-    const channel = localChannelForActiveModel(config);
-    return buildApiUrl(channel?.baseUrl || config.baseUrl, path);
-}
-
-function grsaiDirectHeaders(config: AiConfig) {
-    const channel = localChannelForActiveModel(config);
-    return { Authorization: `Bearer ${channel?.apiKey || config.apiKey}`, "Content-Type": "application/json" };
+function grsaiRelayHeaders(config: AiConfig) {
+	const channel = localChannelForActiveModel(config);
+	return {
+		"X-Local-GRSAI-Base-URL": channel?.baseUrl || config.baseUrl,
+		"X-Local-GRSAI-API-Key": channel?.apiKey || config.apiKey,
+		"Content-Type": "application/json",
+	};
 }
 
 function normalizeGrsaiDrawResponse(value: unknown): GrsaiDrawResponse {
@@ -317,9 +316,9 @@ async function requestGrsaiDrawImages(config: AiConfig, prompt: string, referenc
             requestWithTransientRetry(
                 () =>
                     withTimeout(Math.min(20, GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS), (signal) =>
-                        fetch(grsaiDirectApiUrl(config, "/draw/completions"), {
+                        fetch("/api/local-ai/grsai/draw/completions", {
                             method: "POST",
-                            headers: grsaiDirectHeaders(config),
+                            headers: grsaiRelayHeaders(config),
                             body: JSON.stringify(body),
                             signal,
                         }),
@@ -343,9 +342,9 @@ async function requestGrsaiDrawImages(config: AiConfig, prompt: string, referenc
                 await new Promise((resolve) => window.setTimeout(resolve, 1500));
                 const remainingSeconds = Math.max(1, Math.ceil((deadline - Date.now()) / 1000));
                 const resultResponse = await withTimeout(Math.min(10, remainingSeconds), (signal) =>
-                    fetch(grsaiDirectApiUrl(config, "/draw/result"), {
+                    fetch("/api/local-ai/grsai/draw/result", {
                         method: "POST",
-                        headers: grsaiDirectHeaders(config),
+                        headers: grsaiRelayHeaders(config),
                         body: JSON.stringify({ id: task.id }),
                         signal,
                     }),
@@ -640,9 +639,9 @@ function withPromptGuard(config: AiConfig, prompt: string) {
 
 function usesAccountProxy(config: AiConfig) {
     const token = useUserStore.getState().token;
-    // GRS GPT Image 2 必须浏览器直连国内节点；旧配置可能仍保留 remote 标记，
-    // 也不能让它误入账号代理后创建一个永不完成的本地任务。
-    if (isLocalKimiRelay(config) || isBrowserDirectLocalChannel(config)) return false;
+	// GRS GPT Image 2 与 Kimi 都由本机受限中继直连国内节点；旧配置可能仍保留 remote 标记，
+	// 也不能让它误入账号代理后创建一个永不完成的本地任务。
+	if (isLocalKimiRelay(config) || isLocalGrsaiRelay(config)) return false;
     return config.channelMode === "remote" || (config.channelMode === "local" && Boolean(token));
 }
 
@@ -671,7 +670,7 @@ export function aiHeaders(config: AiConfig, contentType?: string) {
             ...(contentType ? { "Content-Type": contentType } : {}),
         };
     }
-    if (token && !isBrowserDirectLocalChannel(config)) {
+	if (token && !isLocalGrsaiRelay(config)) {
         const userChannelId = channelIdForActiveModel(config);
         return {
             Authorization: `Bearer ${token}`,

@@ -21,6 +21,8 @@ import (
 const userModelChannelHeader = "X-User-Model-Channel-ID"
 const localKimiAPIKeyHeader = "X-Local-Kimi-API-Key"
 const localKimiBaseURLHeader = "X-Local-Kimi-Base-URL"
+const localGRSAIAPIKeyHeader = "X-Local-GRSAI-API-Key"
+const localGRSAIBaseURLHeader = "X-Local-GRSAI-Base-URL"
 
 func selectAIRequestChannel(user model.AuthUser, modelName string, channelID string, userChannelID string) (model.ModelChannel, string, error) {
 	userChannelID = strings.TrimSpace(userChannelID)
@@ -114,6 +116,65 @@ func LocalKimiChatCompletions(w http.ResponseWriter, r *http.Request) {
 	copyAIResponseBody(w, response.Body)
 }
 
+// LocalGRSAIDraw forwards only the two documented GRS draw endpoints from the
+// local application. Keeping the request on the same origin avoids browser CORS
+// failures while the outbound request remains a direct connection with proxies
+// explicitly disabled.
+func LocalGRSAIDraw(w http.ResponseWriter, r *http.Request, action string) {
+	if !isLoopbackRequest(r) {
+		FailWithStatus(w, http.StatusForbidden, "仅允许本机访问 GRS AI 本地通道")
+		return
+	}
+
+	action = strings.ToLower(strings.TrimSpace(action))
+	if action != "completions" && action != "result" {
+		FailWithStatus(w, http.StatusNotFound, "不支持的 GRS 图像接口")
+		return
+	}
+
+	apiKey := strings.TrimSpace(r.Header.Get(localGRSAIAPIKeyHeader))
+	baseURL, ok := normalizeLocalGRSAIBaseURL(r.Header.Get(localGRSAIBaseURLHeader))
+	if apiKey == "" || !ok {
+		FailWithStatus(w, http.StatusBadRequest, "GRS AI 本地通道配置不完整")
+		return
+	}
+
+	body, contentType, _, err := readAIRequest(r)
+	if err != nil {
+		FailWithStatus(w, http.StatusBadRequest, "GRS 图像请求读取失败")
+		return
+	}
+
+	request, err := http.NewRequest(http.MethodPost, baseURL+"/v1/draw/"+action, bytes.NewReader(body))
+	if err != nil {
+		Fail(w, "GRS 图像请求创建失败")
+		return
+	}
+	request.Header.Set("Authorization", "Bearer "+apiKey)
+	request.Header.Set("Content-Type", firstNonEmpty(contentType, "application/json"))
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	response, err := (&http.Client{Timeout: 180 * time.Second, Transport: transport}).Do(request)
+	if err != nil {
+		log.Printf("local GRS draw request failed: %v", err)
+		Fail(w, "GRS AI 国内直连失败")
+		return
+	}
+	defer response.Body.Close()
+
+	for key, values := range response.Header {
+		if strings.EqualFold(key, "Content-Length") || strings.EqualFold(key, "Content-Encoding") || strings.EqualFold(key, "Transfer-Encoding") {
+			continue
+		}
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(response.StatusCode)
+	copyAIResponseBody(w, response.Body)
+}
+
 func isLoopbackRequest(r *http.Request) bool {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -133,6 +194,22 @@ func normalizeLocalKimiBaseURL(value string) (string, bool) {
 		return "", false
 	}
 	return "https://api.moonshot.cn/v1", true
+}
+
+func normalizeLocalGRSAIBaseURL(value string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || !strings.EqualFold(parsed.Scheme, "https") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host != "grsai.dakka.com.cn" && host != "grsaiapi.com" {
+		return "", false
+	}
+	path := strings.TrimRight(parsed.Path, "/")
+	if path != "" && !strings.EqualFold(path, "/v1") {
+		return "", false
+	}
+	return "https://" + host, true
 }
 
 func AIResponses(w http.ResponseWriter, r *http.Request) {

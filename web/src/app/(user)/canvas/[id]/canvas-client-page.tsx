@@ -12,6 +12,7 @@ import { createCanvasImageTask, pollCanvasImageTaskStatus, requestImageQuestion,
 import { createCanvasAudioTask, pollCanvasAudioTaskStatus, type CanvasAudioTask } from "@/services/api/audio";
 import { createVideoGenerationTask, pollVideoGenerationTaskStatus, VIDEO_POLL_INTERVAL_MS, type VideoResponse } from "@/services/api/video";
 import { createTopazVideoTask, getTopazVideoCapabilities, getTopazVideoTask, type TopazVideoCapabilities, type TopazVideoTask } from "@/services/api/topaz-video";
+import { optimizeMiniMaxH3Prompt } from "@/services/h3-prompt-optimizer";
 import { defaultConfig, isKimiK3Model, KIMI_K3_CHANNEL_ID, KIMI_K3_MODEL, MINIMAX_H3_REFERENCE_TO_VIDEO_MODEL, MINIMAX_H3_REF2VA_CHANNEL_ID, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { collectImageStorageKeys, deleteStoredImages, resolveImageUrl, uploadImage, uploadRemoteImageToServer, type UploadedImage } from "@/services/image-storage";
 import { resolveMediaUrl, uploadMediaFile, uploadRemoteMediaToServer, type UploadedFile } from "@/services/file-storage";
@@ -2674,13 +2675,35 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             let pendingChildIds: string[] = [];
 
             try {
-                const generationContext = await hydrateNodeGenerationContext(
+                const hydratedGenerationContext = await hydrateNodeGenerationContext(
                     buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, mode === "text" ? buildCanvasTextCreativePrompt(sourceNode?.metadata?.textCreativeMode, textRequest) : prompt),
                     { includeVideoDataUrls: isKimiMultimodalText },
                 );
+                const generationContext = ensureH3ReferenceContext(generationConfig, hydratedGenerationContext);
                 if (generationContext.skippedReferenceImageCount) message.warning(`已跳过 ${generationContext.skippedReferenceImageCount} 张失效参考图`);
                 const effectivePrompt = generationContext.prompt.trim();
-                const requestPrompt = mode === "video" || (mode === "image" && !isPanoramaNodeType(sourceNode?.type)) ? applyCameraPrompt(effectivePrompt, sourceNode?.metadata?.cameraControl) : effectivePrompt;
+                let requestPrompt = mode === "video" || (mode === "image" && !isPanoramaNodeType(sourceNode?.type)) ? applyCameraPrompt(effectivePrompt, sourceNode?.metadata?.cameraControl) : effectivePrompt;
+                let h3OptimizedPrompt = "";
+                let h3PromptSource: "kimi-k3" | "template" | undefined;
+                let h3PromptWarning = "";
+                if (mode === "video" && isMiniMaxH3VideoModel(generationConfig.model)) {
+                    const optimized = await optimizeMiniMaxH3Prompt(generationConfig, {
+                        prompt: requestPrompt,
+                        seconds: generationConfig.videoSeconds,
+                        h3GenerationMode: generationContext.h3GenerationMode,
+                        referenceImages: generationContext.referenceImages,
+                        firstFrame: generationContext.firstFrame,
+                        lastFrame: generationContext.lastFrame,
+                        referenceVideos: generationContext.referenceVideos,
+                        referenceAudios: generationContext.referenceAudios,
+                    });
+                    requestPrompt = optimized.prompt;
+                    h3OptimizedPrompt = optimized.prompt;
+                    h3PromptSource = optimized.source;
+                    h3PromptWarning = optimized.warning || "";
+                    if (optimized.source === "kimi-k3") message.info("H3 提示词已由 Kimi K3 按官方规则优化");
+                    else if (optimized.warning) message.warning(optimized.warning);
+                }
                 const statusPrompt = sourceNode?.type === CanvasNodeType.Config ? effectivePrompt : prompt;
                 if (!effectivePrompt && (mode === "text" || mode === "audio")) {
                     setRunningNodeId(null);
@@ -3087,6 +3110,10 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                             h3ReferenceMode: generationContext.h3FullReference ? "full" : sourceNode?.metadata?.h3ReferenceMode,
                             h3GenerationMode: generationContext.h3GenerationMode,
                             h3ReferenceNodeIds: sourceNode?.metadata?.h3ReferenceNodeIds,
+                            h3OriginalPrompt: isMiniMaxH3VideoModel(videoGenerationConfig.model) ? effectivePrompt : undefined,
+                            h3OptimizedPrompt: h3OptimizedPrompt || undefined,
+                            h3PromptSource,
+                            h3PromptWarning: h3PromptWarning || undefined,
                             klingImageNodeIds: sourceNode?.metadata?.klingImageNodeIds,
                             klingMultiPrompt: sourceNode?.metadata?.klingMultiPrompt,
                             klingElementList: sourceNode?.metadata?.klingElementList,
@@ -3646,7 +3673,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
 
             const retrySourcePrompt = sourceNode.metadata?.prompt || node.metadata?.prompt || "";
             const isKimiMultimodalText = node.type === CanvasNodeType.Text && isKimiK3Model(generationConfig.model);
-            const context = hasSavedImageMetadata
+            const hydratedContext = hasSavedImageMetadata
                 ? null
                 : await hydrateNodeGenerationContext(
                       buildNodeGenerationContext(
@@ -3657,8 +3684,9 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                       ),
                       { includeVideoDataUrls: isKimiMultimodalText },
                   );
+            const context = hydratedContext ? ensureH3ReferenceContext(generationConfig, hydratedContext) : null;
             const prompt = (isPanorama ? savedImageMetadata?.panoramaFinalPrompt || "" : savedImageMetadata?.prompt || context?.prompt || "").trim();
-            const requestPrompt = isPanorama ? prompt : applyCameraPrompt(prompt, savedImageMetadata?.cameraControl || node.metadata?.cameraControl);
+            let requestPrompt = isPanorama ? prompt : applyCameraPrompt(prompt, savedImageMetadata?.cameraControl || node.metadata?.cameraControl);
             if (!prompt) {
                 message.warning("找不到提示词，无法重试");
                 return;
@@ -3673,6 +3701,27 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 return;
             }
             const retryImages = retryReferenceImages || [];
+
+            if (node.type === CanvasNodeType.Video && isMiniMaxH3VideoModel(generationConfig.model)) {
+                const savedOptimizedPrompt = node.metadata?.h3OptimizedPrompt?.trim();
+                if (savedOptimizedPrompt) {
+                    requestPrompt = savedOptimizedPrompt;
+                } else if (context) {
+                    const optimized = await optimizeMiniMaxH3Prompt(generationConfig, {
+                        prompt: requestPrompt,
+                        seconds: generationConfig.videoSeconds,
+                        h3GenerationMode: context.h3GenerationMode,
+                        referenceImages: context.referenceImages,
+                        firstFrame: context.firstFrame,
+                        lastFrame: context.lastFrame,
+                        referenceVideos: context.referenceVideos,
+                        referenceAudios: context.referenceAudios,
+                    });
+                    requestPrompt = optimized.prompt;
+                    if (optimized.source === "kimi-k3") message.info("H3 提示词已由 Kimi K3 按官方规则优化");
+                    else if (optimized.warning) message.warning(optimized.warning);
+                }
+            }
 
             setRunningNodeId(node.id);
             const retryStartedAt = Date.now();
@@ -4838,6 +4887,20 @@ function withCanvasVideoAdvancedConfig(config: AiConfig, context: Pick<NodeGener
         videoMultiPrompt: context.videoMultiPrompt.length ? context.videoMultiPrompt : config.videoMultiPrompt,
         videoElementList: context.videoElementList.length ? context.videoElementList : config.videoElementList,
     };
+}
+
+function isMiniMaxH3VideoModel(model: string) {
+    return model.trim().toLowerCase().includes("minimax-h3");
+}
+
+function ensureH3ReferenceContext(config: AiConfig, context: NodeGenerationContext): NodeGenerationContext {
+    if (!isMiniMaxH3VideoModel(config.model)) return context;
+    const hasVideoOrAudioReference = context.referenceVideos.length > 0 || context.referenceAudios.length > 0;
+    if (!hasVideoOrAudioReference) return context;
+    if (context.h3GenerationMode === "turbo-4step") {
+        throw new Error("4 步 Turbo 当前仅支持文生视频与首尾帧；连接视频或音频参考后请切换到全能参考模式。");
+    }
+    return { ...context, h3FullReference: true, h3GenerationMode: "multi-reference" };
 }
 
 function generationReferenceUrls(context: {

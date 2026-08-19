@@ -95,6 +95,10 @@ export type CanvasNodeMetadata = {
     h3ReferenceMode?: "frames" | "full";
     h3GenerationMode?: "standard" | "multi-reference" | "turbo-4step";
     h3ReferenceNodeIds?: string[];
+    h3OriginalPrompt?: string;
+    h3OptimizedPrompt?: string;
+    h3PromptSource?: "kimi-k3" | "template";
+    h3PromptWarning?: string;
     multiShot?: string;
     shotType?: string;
     klingImageNodeIds?: string[];

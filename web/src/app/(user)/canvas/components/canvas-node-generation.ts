@@ -23,6 +23,7 @@ export type NodeGenerationContext = {
     imageCount: number;
     videoCount: number;
     audioCount: number;
+    skippedReferenceImageCount?: number;
 };
 
 export type NodeGenerationInput = {
