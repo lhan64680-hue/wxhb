@@ -88,6 +88,7 @@
 - 将当前未提交的代码全部提交到 Git。
 - 提交完成后，给当前提交打最新版本号对应的 tag，例如 `v0.0.5`。
 - 发版本流程中不要执行编译、测试或构建，除非用户明确要求。
+- Windows 的 Codex 桌面环境中，GitHub HTTPS 的凭据助手可能令 `git-remote-https.exe` 崩溃。远程发布必须使用 `scripts/publish-release.ps1`；它只在当前进程清除代理变量，并通过 GitHub CLI 生成临时授权头，绝不将 Token 写入文件或 Git 配置。不要在 Codex 内用裸 `git push`、`git fetch` 或 `git ls-remote` 访问 GitHub。
 
 ## 项目注意事项
 

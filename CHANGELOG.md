@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.5.18
+
++ [修复] Windows Codex 桌面环境中的 GitHub 发布改为使用临时 GitHub CLI 授权头并绕过 Git 凭据助手，避免 `git-remote-https.exe` 内存读取错误弹窗；令牌只存在于发布进程内，不会写入仓库或 Git 配置。
+
 ## v0.5.17
 
 + [修复] GRS AI `gpt-image-2` 图片请求改为浏览器同源访问本机受限中继，再由本机后端直接连接国内 GRS 站；消除浏览器跨域导致的文生图/图生图失败，且外部请求显式禁用代理。

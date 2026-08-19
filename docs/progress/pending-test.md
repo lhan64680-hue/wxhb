@@ -5,6 +5,8 @@ description: 当前版本已实现但仍需人工验证的变更项
 
 # 待测试
 
+- [修复] GitHub 自动发布不再依赖会在 Windows Codex 环境崩溃的 Git 凭据助手。发布脚本会仅在进程内读取 GitHub CLI 授权、清除代理环境变量、用临时授权头推送，随后立即清理；Token 不会写入项目文件或 Git 配置。已完成一次只读远端 `main` 验证；下一次版本发布应不再弹出 `git-remote-https.exe` 内存读取错误框。
+
 - [修复] GRS AI `gpt-image-2` 的文生图与图生图不再由浏览器跨域直连，而是经本机受限中继直接访问国内 GRS；中继仅允许本机请求和固定的 GRS 域名，外部请求显式不使用代理。已通过 Go handler/router 测试和前端 TypeScript 检查；请在“配置 → 本地模型渠道”确认 GRS Key 已保存后，分别用纯文本和一张本地参考图各生成一次，确认不会出现 Network Error，失败时应直接显示上游错误。
 
 - [新增] 本地 MiniMax-H3 在每次视频提交前会使用已配置的 Kimi K3 将“原始提示词 + 首尾帧/参考图”转换为官方 H3 结构化提示词：文字/首尾帧模式使用 `integrated_multimodal_description`、`overall_soundscape`、`non_diegetic_music`，全能参考使用固定六段。视频节点会保存原提示词、优化后提示词和降级原因；未配置或调用失败会显示提示并继续使用本地合规模板。请用一张图片连接 H3 视频节点，填写明确动作和镜头提示词后生成，确认弹出“Kimi K3 按官方规则优化”且成片遵从动作；再临时移除 Kimi Key 验证仍能提交 H3。
