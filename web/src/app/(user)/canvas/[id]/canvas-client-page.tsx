@@ -2670,26 +2670,28 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             const editingTextNode = mode === "text" && Boolean(sourceTextContent);
             const textRequest = editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt;
             const isKimiMultimodalText = mode === "text" && isKimiK3Model(generationConfig.model);
-            const generationContext = await hydrateNodeGenerationContext(
-                buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, mode === "text" ? buildCanvasTextCreativePrompt(sourceNode?.metadata?.textCreativeMode, textRequest) : prompt),
-                { includeVideoDataUrls: isKimiMultimodalText },
-            );
-            const effectivePrompt = generationContext.prompt.trim();
-            const requestPrompt = mode === "video" || (mode === "image" && !isPanoramaNodeType(sourceNode?.type)) ? applyCameraPrompt(effectivePrompt, sourceNode?.metadata?.cameraControl) : effectivePrompt;
             const markSourceStatus = !isCanvasImageNodeType(sourceNode?.type) && !editingTextNode;
-            const statusPrompt = sourceNode?.type === CanvasNodeType.Config ? effectivePrompt : prompt;
-            if (!effectivePrompt && (mode === "text" || mode === "audio")) {
-                setRunningNodeId(null);
-                return;
-            }
             let pendingChildIds: string[] = [];
-            const generationStartedAt = Date.now();
-            if (markSourceStatus)
-                setNodes((prev) =>
-                    prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt: statusPrompt, status: NODE_STATUS_LOADING, startedAt: generationStartedAt, durationMs: undefined, errorDetails: undefined } } : node)),
-                );
 
             try {
+                const generationContext = await hydrateNodeGenerationContext(
+                    buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, mode === "text" ? buildCanvasTextCreativePrompt(sourceNode?.metadata?.textCreativeMode, textRequest) : prompt),
+                    { includeVideoDataUrls: isKimiMultimodalText },
+                );
+                if (generationContext.skippedReferenceImageCount) message.warning(`已跳过 ${generationContext.skippedReferenceImageCount} 张失效参考图`);
+                const effectivePrompt = generationContext.prompt.trim();
+                const requestPrompt = mode === "video" || (mode === "image" && !isPanoramaNodeType(sourceNode?.type)) ? applyCameraPrompt(effectivePrompt, sourceNode?.metadata?.cameraControl) : effectivePrompt;
+                const statusPrompt = sourceNode?.type === CanvasNodeType.Config ? effectivePrompt : prompt;
+                if (!effectivePrompt && (mode === "text" || mode === "audio")) {
+                    setRunningNodeId(null);
+                    return;
+                }
+                const generationStartedAt = Date.now();
+                if (markSourceStatus)
+                    setNodes((prev) =>
+                        prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt: statusPrompt, status: NODE_STATUS_LOADING, startedAt: generationStartedAt, durationMs: undefined, errorDetails: undefined } } : node)),
+                    );
+
                 if (mode === "image" && isPanoramaNodeType(sourceNode?.type)) {
                     const panoramaSourcePrompt = prompt.trim();
                     const sourceReference: ReferenceImage[] = sourceNode?.metadata?.content

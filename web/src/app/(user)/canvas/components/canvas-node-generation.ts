@@ -303,12 +303,25 @@ export function buildNodeChatMessages(context: NodeGenerationContext, options: {
 
 export async function hydrateNodeGenerationContext(context: NodeGenerationContext, options: { includeVideoDataUrls?: boolean } = {}) {
     const { imageToDataUrl } = await import("@/services/image-storage");
+    const hydratedReferences = await Promise.all(
+        context.referenceImages.map(async (image) => {
+            try {
+                return { ...image, dataUrl: await imageToDataUrl(image) };
+            } catch {
+                return null;
+            }
+        }),
+    );
+    const referenceImages = hydratedReferences.filter((image): image is ReferenceImage => Boolean(image));
+    const skippedReferenceImageCount = hydratedReferences.length - referenceImages.length;
+    if (context.referenceImages.length && !referenceImages.length) throw new Error("已连接的参考图均已失效或无法访问，请重新上传替换后再生成");
     return {
         ...context,
-        referenceImages: await Promise.all(context.referenceImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) }))),
+        referenceImages,
         firstFrame: context.firstFrame ? { ...context.firstFrame, dataUrl: await imageToDataUrl(context.firstFrame) } : null,
         lastFrame: context.lastFrame ? { ...context.lastFrame, dataUrl: await imageToDataUrl(context.lastFrame) } : null,
         referenceVideos: options.includeVideoDataUrls ? await Promise.all(context.referenceVideos.map(async (video) => ({ ...video, url: await videoToDataUrl(video) }))) : context.referenceVideos,
+        skippedReferenceImageCount,
     };
 }
 
