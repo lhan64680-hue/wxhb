@@ -105,6 +105,21 @@ export default function IndexPage() {
                                     <stop offset="1" stopColor="#22d3ee" />
                                     {!hoveredToolId ? <animateTransform attributeName="gradientTransform" type="rotate" from="0 500 270" to="360 500 270" dur="18s" repeatCount="indefinite" /> : null}
                                 </linearGradient>
+                                <linearGradient id="home-orbit-side" x1="80" y1="270" x2="920" y2="270" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0" stopColor="#b96c17" />
+                                    <stop offset="0.25" stopColor="#b51e69" />
+                                    <stop offset="0.5" stopColor="#6d22ad" />
+                                    <stop offset="0.75" stopColor="#2822ad" />
+                                    <stop offset="1" stopColor="#087fa5" />
+                                    {!hoveredToolId ? <animateTransform attributeName="gradientTransform" type="rotate" from="0 500 270" to="360 500 270" dur="18s" repeatCount="indefinite" /> : null}
+                                </linearGradient>
+                                <linearGradient id="home-orbit-bevel" x1="80" y1="270" x2="920" y2="270" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0" stopColor="#fff8dd" stopOpacity=".82" />
+                                    <stop offset="0.33" stopColor="#fff" stopOpacity=".74" />
+                                    <stop offset="0.66" stopColor="#f6edff" stopOpacity=".7" />
+                                    <stop offset="1" stopColor="#dfffff" stopOpacity=".78" />
+                                    {!hoveredToolId ? <animateTransform attributeName="gradientTransform" type="rotate" from="0 500 270" to="360 500 270" dur="18s" repeatCount="indefinite" /> : null}
+                                </linearGradient>
                                 <linearGradient id="home-orbit-glow" x1="120" y1="270" x2="880" y2="270" gradientUnits="userSpaceOnUse">
                                     <stop offset="0" stopColor="#fff" stopOpacity="0" />
                                     <stop offset="0.5" stopColor="#fff" stopOpacity=".9" />
@@ -112,11 +127,16 @@ export default function IndexPage() {
                                 </linearGradient>
                                 <filter id="home-orbit-shadow" x="-20%" y="-45%" width="140%" height="190%">
                                     <feDropShadow dx="0" dy="18" stdDeviation="16" floodColor="#7c3aed" floodOpacity=".20" />
+                                    <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#312e81" floodOpacity=".16" />
                                 </filter>
                             </defs>
                             <g filter="url(#home-orbit-shadow)">
                                 {!hoveredToolId ? <animateTransform attributeName="transform" type="rotate" values="-0.7 500 270;0.7 500 270;-0.7 500 270" dur="14s" repeatCount="indefinite" /> : null}
+                                <path d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" transform="translate(0 19)" fill="none" stroke="url(#home-orbit-side)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="82" />
                                 <path d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" fill="none" stroke="url(#home-orbit-ribbon)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="76" />
+                                <path d="M 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" transform="translate(0 19)" fill="none" stroke="url(#home-orbit-side)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="82" />
+                                <path d="M 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" fill="none" stroke="url(#home-orbit-ribbon)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="76" />
+                                <path d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" transform="translate(0 -25)" fill="none" stroke="url(#home-orbit-bevel)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="8" />
                                 <path d="M 500 270 C 365 65, 105 65, 90 270 C 105 475, 365 475, 500 270 C 635 65, 895 65, 910 270 C 895 475, 635 475, 500 270" fill="none" stroke="url(#home-orbit-glow)" strokeLinecap="round" strokeWidth="10" strokeDasharray="130 1060">
                                     {!hoveredToolId ? <animate attributeName="stroke-dashoffset" from="0" to="-1190" dur="7s" repeatCount="indefinite" /> : null}
                                 </path>
