@@ -39,6 +39,11 @@ H3_MODES = {
     "multi-reference": {"label": "多参考", "profile": "reference", "reference": True, "turbo": False},
     "turbo-4step": {"label": "4 步 Turbo", "profile": "turbo", "reference": False, "turbo": True},
 }
+H3_PROGRESS_SECONDS = {
+    "standard": 600,
+    "multi-reference": 720,
+    "turbo-4step": 180,
+}
 JOBS: dict[str, dict[str, Any]] = {}
 
 app = Flask(__name__)
@@ -383,6 +388,7 @@ def submit_h3_job(data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     settings = PROFILES[profile]
     JOBS[job_id] = {
         "prompt_id": prompt_id,
+        "started_at": time.time(),
         "seed": seed,
         "profile": profile,
         "duration": duration,
@@ -399,6 +405,14 @@ def job_record(job_id: str) -> dict[str, Any] | None:
     if isinstance(record, str):
         return {"prompt_id": record}
     return record
+
+
+def estimated_progress(record: dict[str, Any]) -> int:
+    mode = str(record.get("h3_mode") or "standard")
+    expected_seconds = H3_PROGRESS_SECONDS.get(mode, H3_PROGRESS_SECONDS["standard"])
+    duration = max(5, parse_int(record.get("duration"), 5))
+    elapsed = max(0.0, time.time() - float(record.get("started_at") or time.time()))
+    return min(95, max(1, round(elapsed / (expected_seconds * duration / 5) * 95)))
 
 
 def job_status_data(job_id: str) -> dict[str, Any]:
@@ -436,7 +450,7 @@ def v1_video_payload(job_id: str, status: dict[str, Any]) -> dict[str, Any]:
     elif status["state"] == "error":
         payload.update({"status": "failed", "progress": 0, "error": {"message": status.get("error") or "H3 generation failed"}})
     else:
-        payload.update({"status": "processing", "progress": 0})
+        payload.update({"status": "processing", "progress": estimated_progress(record), "progress_mode": "estimated"})
     return payload
 
 
@@ -521,7 +535,7 @@ def job(job_id: str) -> Response:
         if status["state"] == "missing":
             return jsonify({"error": "任务不存在或页面已重启。"}), 404
         if status["state"] == "running":
-            return jsonify({"state": "running"})
+            return jsonify({"state": "running", "progress": estimated_progress(status["record"]), "progress_mode": "estimated"})
         if status["state"] == "error":
             return jsonify({"state": "error", "error": f"推理引擎错误：{status.get('error')}"})
         return jsonify({"state": "done", "files": status.get("files", []), "elapsed": time.time()})

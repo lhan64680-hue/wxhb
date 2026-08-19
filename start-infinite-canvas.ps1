@@ -53,6 +53,9 @@ function Test-H3SageRuntime {
 
 function Sync-H3TurboNode {
     $files = @("__init__.py", "h3_silu_temb_grid.safetensors", "pyproject.toml", "LICENSE")
+    if (Test-ListeningPort 8188) {
+        return
+    }
     if (-not (Test-Path -LiteralPath $h3TurboAssets)) {
         return
     }

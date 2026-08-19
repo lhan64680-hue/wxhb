@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { FileText, Image as ImageIcon, Music2, Plus, Settings2, Trash2, Video as VideoIcon, X } from "lucide-react";
+import { FileText, Gauge, Image as ImageIcon, Layers3, Music2, Plus, Settings2, Trash2, Video as VideoIcon, X, Zap } from "lucide-react";
 import { Button, Input, Switch } from "antd";
 
 import { VideoSettingsPanel, isAPIMartKlingMotionControlConfig, isKIEKlingMotionControlConfig, isAPIMartKlingV3Config, isKIEKlingV3Config, videoResolutionLabel, videoSecondsLabel, videoSizeLabel } from "@/components/video-settings-panel";
@@ -231,16 +231,10 @@ function H3ReferenceSettings({
     return (
         <>
             <CanvasSettingGroup title="H3 运行模式" color={theme.node.muted}>
-                <div className="grid grid-cols-3 gap-2">
-                    <OptionPill selected={generationMode === "standard"} theme={theme} onClick={() => selectGenerationMode("standard")}>
-                        标准
-                    </OptionPill>
-                    <OptionPill selected={generationMode === "multi-reference"} theme={theme} onClick={() => selectGenerationMode("multi-reference")}>
-                        多参考
-                    </OptionPill>
-                    <OptionPill selected={generationMode === "turbo-4step"} theme={theme} onClick={() => selectGenerationMode("turbo-4step")}>
-                        4 步 Turbo
-                    </OptionPill>
+                <div className="grid gap-2">
+                    <H3ModeCard selected={generationMode === "standard"} theme={theme} icon={<Gauge className="size-4" />} title="标准生成" subtitle="20 步采样 · 画面稳定、细节优先" onClick={() => selectGenerationMode("standard")} />
+                    <H3ModeCard selected={generationMode === "multi-reference"} theme={theme} icon={<Layers3 className="size-4" />} title="多参考 Ref2VA" subtitle="图片、视频、音频全能参考" onClick={() => selectGenerationMode("multi-reference")} />
+                    <H3ModeCard selected={generationMode === "turbo-4step"} theme={theme} icon={<Zap className="size-4" />} title="4 步 Turbo" subtitle="LoRA 加速 · 文生与首尾帧极速生成" onClick={() => selectGenerationMode("turbo-4step")} />
                 </div>
                 <p className="text-[11px] leading-4 opacity-60">
                     {generationMode === "multi-reference" ? "Ref2VA：可同时使用图片、视频与音频参考。" : generationMode === "turbo-4step" ? "Turbo LoRA：5 秒视频仅执行 4 步采样，支持文生与首尾帧。" : "标准 H3：20 步采样，适合追求画面稳定与细节。"}
@@ -282,6 +276,40 @@ function H3ReferenceSettings({
                 </CanvasSettingGroup>
             )}
         </>
+    );
+}
+
+function H3ModeCard({
+    selected,
+    theme,
+    icon,
+    title,
+    subtitle,
+    onClick,
+}: {
+    selected: boolean;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    icon: ReactNode;
+    title: string;
+    subtitle: string;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition hover:brightness-105"
+            style={{ borderColor: selected ? theme.node.activeStroke : theme.node.stroke, background: selected ? theme.toolbar.activeBg : theme.node.fill, color: selected ? theme.node.activeStroke : theme.node.text }}
+            onClick={onClick}
+        >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg" style={{ background: selected ? theme.node.fill : theme.toolbar.panel }}>
+                {icon}
+            </span>
+            <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{title}</span>
+                <span className="mt-0.5 block text-[11px] leading-4 opacity-65">{subtitle}</span>
+            </span>
+            <span className="size-2.5 shrink-0 rounded-full border" style={{ borderColor: selected ? theme.node.activeStroke : theme.node.muted, background: selected ? theme.node.activeStroke : "transparent" }} />
+        </button>
     );
 }
 
