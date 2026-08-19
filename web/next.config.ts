@@ -15,6 +15,7 @@ export default function nextConfig(phase: string): NextConfig {
 
     return {
         output: "standalone",
+        devIndicators: false,
         allowedDevOrigins: isDev ? ["*.*.*.*"] : [],
         typescript: {
             ignoreBuildErrors: true,
