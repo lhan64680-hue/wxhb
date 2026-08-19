@@ -1,4 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
+import { Scissors } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -9,14 +10,18 @@ export function ConnectionPath({
     from,
     to,
     active,
+    selected,
     onSelect,
+    onDelete,
     onContextMenu,
 }: {
     connection: CanvasConnection;
     from: CanvasNodeData;
     to: CanvasNodeData;
     active: boolean;
+    selected: boolean;
     onSelect: () => void;
+    onDelete: () => void;
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -27,6 +32,8 @@ export function ConnectionPath({
     const dx = Math.abs(endX - startX);
     const curvature = Math.max(dx * 0.5, 50);
     const pathD = `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`;
+    const middleX = (startX + endX) / 2;
+    const middleY = (startY + endY) / 2;
 
     return (
         <g>
@@ -55,6 +62,25 @@ export function ConnectionPath({
                 fill="none"
                 style={{ filter: active ? `drop-shadow(0 0 8px ${theme.node.activeStroke}66)` : undefined, pointerEvents: "none" }}
             />
+            {selected ? (
+                <foreignObject x={middleX - 20} y={middleY - 20} width="40" height="40" style={{ overflow: "visible", pointerEvents: "all" }}>
+                    <button
+                        type="button"
+                        className="grid size-10 cursor-pointer place-items-center rounded-full border shadow-lg transition hover:scale-105"
+                        style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel, color: theme.node.text }}
+                        title="剪断连接线"
+                        aria-label="剪断连接线"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onDelete();
+                        }}
+                    >
+                        <Scissors className="size-4" />
+                    </button>
+                </foreignObject>
+            ) : null}
         </g>
     );
 }

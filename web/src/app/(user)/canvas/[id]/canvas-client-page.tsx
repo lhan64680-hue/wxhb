@@ -3698,12 +3698,14 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                                         from={from}
                                         to={to}
                                         active={selectedConnectionId === connection.id || relatedHighlight.connectionIds.has(connection.id)}
+                                        selected={selectedConnectionId === connection.id}
                                         onSelect={() => {
                                             setSelectedConnectionId(connection.id);
                                             setSelectedNodeIds(new Set());
                                             setToolbarNodeId(null);
                                             setContextMenu(null);
                                         }}
+                                        onDelete={() => deleteConnection(connection.id)}
                                         onContextMenu={(event) => {
                                             setSelectedConnectionId(connection.id);
                                             setSelectedNodeIds(new Set());
