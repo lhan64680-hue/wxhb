@@ -81,6 +81,8 @@
 
 ## 发版本流程
 
+- 用户要求的每一项代码或配置调整完成后，都必须自动按补丁版本递增根目录 `VERSION`，整理 `CHANGELOG.md` 的 `Unreleased` 为对应版本记录并保留空的 `Unreleased` 标题。
+- 每次自动发布必须提交全部本次调整、创建对应版本 Git tag、推送 `origin/main` 与 tag，并创建同版本的 GitHub Release；远程仓库固定使用 `lhan64680-hue/wxhb`，除非用户明确更换。
 - 发版本时，先把 `CHANGELOG.md` 的 `Unreleased` 变更整理成新的版本记录，并保留空的 `Unreleased` 标题。
 - 按当前版本号提升一个版本，更新根目录 `VERSION`。
 - 将当前未提交的代码全部提交到 Git。
