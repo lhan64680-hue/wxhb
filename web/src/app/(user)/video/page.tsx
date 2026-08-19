@@ -12,6 +12,7 @@ import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/c
 import { ModelPicker } from "@/components/model-picker";
 import { KlingV26WorkbenchPanel } from "@/app/(user)/video/components/kling-v26-workbench-panel";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
+import { ReferenceThumbnailOverlay } from "@/components/reference-thumbnail-overlay";
 import { VideoSettingsPanel, normalizeVideoResolutionValue, normalizeVideoSizeValue } from "@/components/video-settings-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes, formatDuration } from "@/lib/image-utils";
@@ -22,7 +23,7 @@ import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/ima
 import { deleteVideoGenerationLogs, fetchVideoGenerationLogs, saveVideoGenerationLogs } from "@/services/api/generation-logs";
 import { createVideoGenerationTask, deleteVideoGenerationTask, listVideoGenerationTasks, pollVideoGenerationTaskStatus, VIDEO_POLL_INTERVAL_MS, VideoRequestError, type VideoResponse } from "@/services/api/video";
 import { useAssetStore } from "@/stores/use-asset-store";
-import { normalizeLocalChannels, useConfigStore, useEffectiveConfig, type AiConfig, type VideoElementItem, type VideoElementReference } from "@/stores/use-config-store";
+import { normalizeLocalChannels, resolveModelChannelId, useConfigStore, useEffectiveConfig, type AiConfig, type VideoElementItem, type VideoElementReference } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
@@ -684,7 +685,7 @@ export default function VideoPage() {
         setVideoReferences(result.videoReferences || []);
         setAudioReferences(result.audioReferences || []);
         const nextModel = result.config.videoModel || result.model;
-        const nextChannelId = resolveVideoChannelId(effectiveConfig, nextModel, videoTaskChannelId(result.task), result.config.videoChannelId, result.config.activeChannelId);
+        const nextChannelId = resolveModelChannelId(effectiveConfig, nextModel, videoTaskChannelId(result.task), result.config.videoChannelId, result.config.activeChannelId);
         if (nextModel) updateConfig("videoModel", nextModel);
         if (nextChannelId) {
             updateConfig("videoChannelId", nextChannelId);
@@ -993,7 +994,7 @@ export default function VideoPage() {
         setVideoReferences(log.videoReferences || []);
         setAudioReferences(log.audioReferences || []);
         const nextModel = log.config.videoModel || log.model;
-        const nextChannelId = resolveVideoChannelId(effectiveConfig, nextModel, videoTaskChannelId(log.task), log.config.videoChannelId, log.config.activeChannelId);
+        const nextChannelId = resolveModelChannelId(effectiveConfig, nextModel, videoTaskChannelId(log.task), log.config.videoChannelId, log.config.activeChannelId);
         if (nextModel) updateConfig("videoModel", nextModel);
         if (nextChannelId) {
             updateConfig("videoChannelId", nextChannelId);
@@ -1997,19 +1998,6 @@ function TaskInfo({ item, error, onCopyPrompt }: { item: GenerationResult; error
     );
 }
 
-function ReferenceThumbnailOverlay({ references, className = "" }: { references?: ReferenceImage[]; className?: string }) {
-    const visibleReferences = (references || []).filter((item) => Boolean(item.dataUrl)).slice(0, 3);
-    if (!visibleReferences.length) return null;
-    return (
-        <div className={`absolute z-10 flex items-center gap-1 rounded-md bg-black/55 p-1 shadow-sm backdrop-blur ${className}`}>
-            {visibleReferences.map((item) => (
-                <img key={item.id} src={item.dataUrl} alt={item.name} className="size-7 rounded border border-white/60 object-cover" />
-            ))}
-            {(references || []).length > visibleReferences.length ? <span className="px-1 text-[10px] text-white">+{(references || []).length - visibleReferences.length}</span> : null}
-        </div>
-    );
-}
-
 function createResultFromSnapshot(id: string, snapshot: { text: string; config: AiConfig; references: ReferenceImage[]; firstFrame?: ReferenceImage | null; lastFrame?: ReferenceImage | null; videoReferences: ReferenceVideo[]; audioReferences: ReferenceAudio[]; taskCount?: number }, model: string, status: GenerationResult["status"], extra: Partial<GenerationResult> = {}): GenerationResult {
     return {
         id,
@@ -2739,7 +2727,7 @@ function buildVideoConfig(config: AiConfig, model: string): AiConfig {
     const kieKlingV3 = isKIEKlingV3Config(config, model);
     const klingV3 = apimartKlingV3 || kieKlingV3;
     const kling = klingV26 || klingV3;
-    const videoChannelId = resolveVideoChannelId(config, model, config.videoChannelId, config.activeChannelId);
+    const videoChannelId = resolveModelChannelId(config, model, config.videoChannelId, config.activeChannelId);
     const videoMode = klingV3 && config.videoMode === "4k" ? "4k" : config.videoMode === "pro" ? "pro" : "std";
     return {
         ...config,
@@ -2764,17 +2752,6 @@ function buildVideoConfig(config: AiConfig, model: string): AiConfig {
 
 function videoTaskChannelId(task?: VideoResponse | null) {
     return task?.userChannelId || task?.channelId || "";
-}
-
-function resolveVideoChannelId(config: AiConfig, model: string, ...preferredIds: Array<string | undefined>) {
-    const channels = config.channelMode === "remote"
-        ? config.publicChannels.map((channel) => ({ id: channel.id || "", models: channel.models || [] }))
-        : normalizeLocalChannels(config).map((channel) => ({ id: channel.id, models: channel.models }));
-    for (const id of preferredIds) {
-        const channelId = (id || "").trim();
-        if (channelId && channels.some((channel) => channel.id === channelId && channel.models.includes(model))) return channelId;
-    }
-    return channels.find((channel) => channel.models.includes(model))?.id || "";
 }
 
 function isAPIMartKlingV26Config(config: AiConfig, model: string) {
@@ -2817,7 +2794,7 @@ function isKIEKlingModelConfig(config: AiConfig, model: string, key: string) {
 }
 
 function videoChannelText(config: AiConfig, model: string) {
-    const channelId = resolveVideoChannelId(config, model, config.videoChannelId, config.activeChannelId);
+    const channelId = resolveModelChannelId(config, model, config.videoChannelId, config.activeChannelId);
     const channels = config.channelMode === "remote" ? config.publicChannels : normalizeLocalChannels(config);
     const channel = channels.find((item) => (item.id || "") === channelId && (item.models || []).includes(model)) || channels.find((item) => (item.models || []).includes(model)) || channels.find((item) => (item.id || "") === channelId);
     const record = channel as { id?: string; name?: string; baseUrl?: string; remark?: string } | undefined;

@@ -1,6 +1,8 @@
 import axios from "axios";
 
 import { dataUrlToFile } from "@/lib/image-utils";
+import { publicHttpUrl } from "@/lib/media-url";
+import { formatApiErrorDetail } from "@/services/api/request";
 import { imageToDataUrl, resolveImageUrl } from "@/services/image-storage";
 import { buildApiUrl, channelIdForActiveModel, KIMI_K3_CHANNEL_ID, localChannelForActiveModel, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -84,7 +86,7 @@ export class ImageRequestError extends Error {
     constructor(message: string, detail?: unknown) {
         super(message);
         this.name = "ImageRequestError";
-        this.detail = formatErrorDetail(detail);
+        this.detail = formatApiErrorDetail(detail);
     }
 }
 
@@ -467,16 +469,6 @@ async function fetchErrorDetail(response: Response, fallback: string) {
         }
     } catch {
         return { message: `${fallback}：${response.status}`, detail: `${response.status} ${response.statusText}` };
-    }
-}
-
-function formatErrorDetail(detail: unknown) {
-    if (detail == null) return "";
-    if (typeof detail === "string") return detail;
-    try {
-        return JSON.stringify(detail, null, 2);
-    } catch {
-        return String(detail);
     }
 }
 
@@ -1308,18 +1300,6 @@ function applyAgnesImageSize(
         high: "4K",
     } as Record<string, string>)[params.quality] || "1K";
     body.ratio = normalizeAgnesImage21Ratio(config.size);
-}
-
-function publicHttpUrl(value?: string) {
-    if (!value || value.startsWith("blob:") || value.startsWith("data:")) return "";
-    try {
-        const url = new URL(value, typeof window === "undefined" ? undefined : window.location.origin);
-        if (!["http:", "https:"].includes(url.protocol)) return "";
-        if (["localhost", "127.0.0.1", "::1"].includes(url.hostname)) return "";
-        return url.href;
-    } catch {
-        return "";
-    }
 }
 
 async function requestAgnesImageEdit(config: AiConfig & { seedIndex?: number; seedCount?: number }, prompt: string, references: ReferenceImage[], params: ImageRequestParams): Promise<GeneratedImage[]> {

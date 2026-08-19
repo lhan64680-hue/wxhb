@@ -1,11 +1,13 @@
 import axios from "axios";
 
 import { dataUrlToFile } from "@/lib/image-utils";
+import { publicHttpUrl } from "@/lib/media-url";
 import { boolConfig, isSeedanceVideoConfig, normalizeSeedanceRatio } from "@/lib/seedance-video";
 import { isKIEGrokVideoModel } from "@/components/video-settings-panel";
 import { modelKey, supportsVideoAudioGeneration } from "@/lib/video-model-capabilities";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { imageToDataUrl, resolveImageUrl } from "@/services/image-storage";
+import { formatApiErrorDetail } from "@/services/api/request";
 import { buildApiUrl, channelIdForActiveModel, localChannelForActiveModel, type AiConfig, type VideoElementReference } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
@@ -26,7 +28,7 @@ export class VideoRequestError extends Error {
     constructor(message: string, detail?: unknown) {
         super(message);
         this.name = "VideoRequestError";
-        this.detail = formatErrorDetail(detail);
+        this.detail = formatApiErrorDetail(detail);
     }
 }
 
@@ -528,18 +530,6 @@ async function imageToAgnesReference(image: ReferenceImage) {
     return imageToDataUrl(image);
 }
 
-function publicHttpUrl(value?: string) {
-    if (!value || value.startsWith("blob:") || value.startsWith("data:")) return "";
-    try {
-        const url = new URL(value, typeof window === "undefined" ? undefined : window.location.origin);
-        if (!["http:", "https:"].includes(url.protocol)) return "";
-        if (["localhost", "127.0.0.1", "::1"].includes(url.hostname)) return "";
-        return url.href;
-    } catch {
-        return "";
-    }
-}
-
 function agnesFrameRate(secondsValue: string) {
     const seconds = Number(normalizeVideoSeconds(secondsValue));
     return seconds > 18 ? Math.max(1, Math.floor(440 / seconds)) : 24;
@@ -673,16 +663,6 @@ function summarizeVideoRequestBody(value: unknown) {
         return { fields, files };
     }
     return value;
-}
-
-function formatErrorDetail(detail: unknown) {
-    if (detail == null) return "";
-    if (typeof detail === "string") return detail;
-    try {
-        return JSON.stringify(detail, null, 2);
-    } catch {
-        return String(detail);
-    }
 }
 
 function stringifyLogPayload(value: unknown) {

@@ -16,7 +16,7 @@ import { createCanvasImageTask, requestEdit, requestGeneration, requestImageQues
 import { saveImageGenerationLogs } from "@/services/api/generation-logs";
 import { deleteUserWorkflow, draftUserWorkflow, fetchUserConfig, fetchUserWorkflows, saveUserWorkflow, type CreativeWorkflowRecord } from "@/services/api/user-config";
 import { deleteStoredImages, imageToDataUrl, uploadImage } from "@/services/image-storage";
-import { defaultConfig, localChannelForActiveModel, normalizeLocalChannels, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, localChannelForActiveModel, resolveModelChannelId, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
@@ -1997,23 +1997,12 @@ function recordToWorkflow(record: CreativeWorkflowRecord<CreativeWorkflow>): Cre
 function resolveWorkflowRuntime(workflow: CreativeWorkflow, baseConfig: AiConfig) {
     const workflowModel = workflow.config.imageModel || workflow.config.model;
     const fallbackModel = baseConfig.imageModel || baseConfig.model;
-    const fallbackChannelId = resolveWorkflowImageChannelId(baseConfig, fallbackModel, baseConfig.imageChannelId, baseConfig.activeChannelId);
+    const fallbackChannelId = resolveModelChannelId(baseConfig, fallbackModel, baseConfig.imageChannelId, baseConfig.activeChannelId);
     if (!workflowModel) return { model: fallbackModel, apiMode: baseConfig.apiMode, channelId: fallbackChannelId };
     if (baseConfig.channelMode === "remote" && workflowModel !== fallbackModel && (!baseConfig.models.length || !baseConfig.models.includes(workflowModel))) {
         return { model: fallbackModel, apiMode: baseConfig.apiMode, channelId: fallbackChannelId };
     }
-    return { model: workflowModel, apiMode: workflow.config.apiMode || baseConfig.apiMode, channelId: resolveWorkflowImageChannelId(baseConfig, workflowModel, workflow.config.imageChannelId, baseConfig.imageChannelId, baseConfig.activeChannelId) };
-}
-
-function resolveWorkflowImageChannelId(config: AiConfig, model: string, ...preferredIds: Array<string | undefined>) {
-    const channels = config.channelMode === "remote"
-        ? config.publicChannels.map((channel) => ({ id: channel.id || "", models: channel.models || [] }))
-        : normalizeLocalChannels(config).map((channel) => ({ id: channel.id, models: channel.models }));
-    for (const id of preferredIds) {
-        const channelId = (id || "").trim();
-        if (channelId && channels.some((channel) => channel.id === channelId && channel.models.includes(model))) return channelId;
-    }
-    return channels.find((channel) => channel.models.includes(model))?.id || "";
+    return { model: workflowModel, apiMode: workflow.config.apiMode || baseConfig.apiMode, channelId: resolveModelChannelId(baseConfig, workflowModel, workflow.config.imageChannelId, baseConfig.imageChannelId, baseConfig.activeChannelId) };
 }
 
 function buildRunConfig(baseConfig: AiConfig, workflowConfig: WorkflowGenerationConfig, runtime: { model: string; apiMode: AiConfig["apiMode"]; channelId: string }): AiConfig {

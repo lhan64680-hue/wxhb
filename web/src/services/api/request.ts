@@ -22,6 +22,16 @@ export function serializeApiParams(params?: ApiParams) {
     return queryParams;
 }
 
+export function formatApiErrorDetail(detail: unknown) {
+    if (detail == null) return "";
+    if (typeof detail === "string") return detail;
+    try {
+        return JSON.stringify(detail, null, 2);
+    } catch {
+        return String(detail);
+    }
+}
+
 export async function apiGet<T>(url: string, params?: ApiParams, token?: string) {
     return apiRequest<T>({
         url,

@@ -5,18 +5,19 @@ import { ArrowUp, FileText, Image as ImageIcon, LoaderCircle, Music2, Video } fr
 import { Button } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasCameraControl } from "./canvas-camera-control";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
-import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
+import { CanvasAudioSettingsPopover } from "./canvas-audio-settings-popover";
 import { CanvasPromptChipInput } from "./canvas-prompt-chip-input";
 import { CanvasVideoSettingsPopover, type CanvasVideoFrameOption, type CanvasVideoResourceOption } from "./canvas-video-settings-popover";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasTextCreativeMode } from "../types";
-import { PANORAMA_IMAGE_SIZE, isCanvasImageNodeType, isPanoramaNodeType } from "../utils/canvas-panorama";
+import { isCanvasImageNodeType, isPanoramaNodeType } from "../utils/canvas-panorama";
+import { buildCanvasNodeConfig, canvasAudioConfigPatch, canvasVideoConfigPatch } from "../utils/canvas-node-config";
 import { canvasTextCreativeOptions, canvasTextCreativeLabel } from "../utils/canvas-text-creative";
 import type { CanvasResourceReference } from "../utils/canvas-resource-references";
 
@@ -42,7 +43,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const mode = defaultMode(node.type);
-    const config = buildNodeConfig(globalConfig, node, mode);
+    const config = buildCanvasNodeConfig(globalConfig, node, mode);
     const isPanorama = isPanoramaNodeType(node.type);
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
     const hasImageContent = isCanvasImageNodeType(node.type) && Boolean(node.metadata?.content);
@@ -130,12 +131,12 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     ) : mode === "video" ? (
                         <>
                             <ModelPicker className="!w-[180px] !min-w-0 !shrink-0" config={config} value={config.model} channelId={config.videoChannelId} onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })} capability="video" onMissingConfig={() => openConfigDialog(true)} />
-                            <CanvasVideoSettingsPopover config={config} buttonClassName="!h-10 !w-[148px] !shrink-0 !justify-start !rounded-full !px-3" frameOptions={videoFrameOptions} resourceOptions={videoResourceOptions} metadata={node.metadata} firstFrameNodeId={node.metadata?.firstFrameNodeId} lastFrameNodeId={node.metadata?.lastFrameNodeId} onFrameChange={(patch) => onConfigChange(node.id, patch)} onMetadataChange={(patch) => onConfigChange(node.id, patch)} onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
+                            <CanvasVideoSettingsPopover config={config} buttonClassName="!h-10 !w-[148px] !shrink-0 !justify-start !rounded-full !px-3" frameOptions={videoFrameOptions} resourceOptions={videoResourceOptions} metadata={node.metadata} firstFrameNodeId={node.metadata?.firstFrameNodeId} lastFrameNodeId={node.metadata?.lastFrameNodeId} onFrameChange={(patch) => onConfigChange(node.id, patch)} onMetadataChange={(patch) => onConfigChange(node.id, patch)} onConfigChange={(key, value) => onConfigChange(node.id, canvasVideoConfigPatch(key, value))} />
                         </>
                     ) : mode === "audio" ? (
                         <>
                             <ModelPicker config={config} value={config.model} channelId={config.audioChannelId || config.activeChannelId} onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })} capability="audio" onMissingConfig={() => openConfigDialog(true)} />
-                            <CanvasAudioSettingsPopover config={config} buttonClassName="!h-10 !max-w-[170px] !justify-start !rounded-full !px-3" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
+                            <CanvasAudioSettingsPopover config={config} buttonClassName="!h-10 !max-w-[170px] !justify-start !rounded-full !px-3" onConfigChange={(key, value) => onConfigChange(node.id, canvasAudioConfigPatch(key, value))} />
                         </>
                     ) : (
                         <ModelPicker config={config} value={config.model} channelId={config.textChannelId} onChange={(model, channelId) => onConfigChange(node.id, { model, channelId })} capability="text" onMissingConfig={() => openConfigDialog(true)} />
@@ -168,41 +169,6 @@ function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
     return type === CanvasNodeType.Text ? "text" : type === CanvasNodeType.Video ? "video" : type === CanvasNodeType.Audio ? "audio" : "image";
 }
 
-function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode): AiConfig {
-    const defaultModel = mode === "image" ? globalConfig.imageModel : mode === "video" ? globalConfig.videoModel : mode === "audio" ? globalConfig.audioModel : globalConfig.textModel;
-    const channelId = node.metadata?.channelId || "";
-    const imageChannelId = mode === "image" ? channelId || globalConfig.imageChannelId : globalConfig.imageChannelId;
-    const videoChannelId = mode === "video" ? channelId || globalConfig.videoChannelId : globalConfig.videoChannelId;
-    const textChannelId = mode === "text" ? channelId || globalConfig.textChannelId : globalConfig.textChannelId;
-    const audioChannelId = mode === "audio" ? channelId || globalConfig.audioChannelId : globalConfig.audioChannelId;
-    const activeChannelId = mode === "image" ? imageChannelId : mode === "video" ? videoChannelId : mode === "text" ? textChannelId : mode === "audio" ? audioChannelId || globalConfig.activeChannelId : globalConfig.activeChannelId;
-    return {
-        ...globalConfig,
-        model: node.metadata?.model || defaultModel || (mode === "audio" ? defaultConfig.audioModel : globalConfig.model || defaultConfig.model),
-        activeChannelId,
-        imageChannelId,
-        videoChannelId,
-        textChannelId,
-        audioChannelId,
-        quality: node.metadata?.quality || globalConfig.quality || defaultConfig.quality,
-        size: isPanoramaNodeType(node.type) ? PANORAMA_IMAGE_SIZE : node.metadata?.size || (mode === "video" ? globalConfig.videoSize || defaultConfig.videoSize : globalConfig.size || defaultConfig.size),
-        videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds || defaultConfig.videoSeconds,
-        vquality: node.metadata?.vquality || globalConfig.vquality || defaultConfig.vquality,
-        videoMode: node.metadata?.mode || globalConfig.videoMode || defaultConfig.videoMode,
-        videoNegativePrompt: node.metadata?.negativePrompt || globalConfig.videoNegativePrompt || defaultConfig.videoNegativePrompt,
-        videoMultiShot: node.metadata?.multiShot || globalConfig.videoMultiShot || defaultConfig.videoMultiShot,
-        videoShotType: node.metadata?.shotType || globalConfig.videoShotType || defaultConfig.videoShotType,
-        videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio || defaultConfig.videoGenerateAudio,
-        videoCharacterOrientation: node.metadata?.characterOrientation || globalConfig.videoCharacterOrientation || defaultConfig.videoCharacterOrientation,
-        videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark || defaultConfig.videoWatermark,
-        audioVoice: node.metadata?.audioVoice || globalConfig.audioVoice || defaultConfig.audioVoice,
-        audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat || defaultConfig.audioFormat,
-        audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed || defaultConfig.audioSpeed,
-        audioInstructions: node.metadata?.audioInstructions || globalConfig.audioInstructions || defaultConfig.audioInstructions,
-        count: String(node.metadata?.count || (mode === "image" ? globalConfig.canvasImageCount || globalConfig.count : globalConfig.count) || defaultConfig.count),
-    };
-}
-
 function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: boolean, hasTextContent: boolean, textCreativeMode: CanvasTextCreativeMode) {
     if (mode === "video") return "描述要生成的视频内容";
     if (mode === "audio") return "描述要生成的音频内容";
@@ -218,23 +184,4 @@ function textCreativeModeIcon(mode: CanvasTextCreativeMode) {
     if (mode === "image-reverse-prompt") return ImageIcon;
     if (mode === "music-prompt") return Music2;
     return FileText;
-}
-
-function videoConfigPatch(key: keyof AiConfig, value: string) {
-    if (key === "videoSeconds") return { seconds: value };
-    if (key === "videoMode") return { mode: value };
-    if (key === "videoNegativePrompt") return { negativePrompt: value };
-    if (key === "videoMultiShot") return { multiShot: value };
-    if (key === "videoShotType") return { shotType: value };
-    if (key === "videoGenerateAudio") return { generateAudio: value };
-    if (key === "videoCharacterOrientation") return { characterOrientation: value };
-    if (key === "videoWatermark") return { watermark: value };
-    return { [key]: value };
-}
-
-function audioConfigPatch(key: CanvasAudioSettingKey, value: string) {
-    if (key === "audioVoice") return { audioVoice: value };
-    if (key === "audioFormat") return { audioFormat: value };
-    if (key === "audioSpeed") return { audioSpeed: value };
-    return { audioInstructions: value };
 }

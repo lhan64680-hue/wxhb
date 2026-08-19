@@ -33,6 +33,7 @@ import { saveAs } from "file-saver";
 import { ImageSettingsPanel, imageFormatLabel, imageQualityLabel, imageSizeLabel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
+import { ReferenceThumbnailOverlay } from "@/components/reference-thumbnail-overlay";
 import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { canvasThemes } from "@/lib/canvas-theme";
 import {
@@ -41,7 +42,7 @@ import {
     type WorkflowExternalTaskStart,
     type WorkflowExternalTaskSuccess,
 } from "@/components/workflows/creative-workflow-workspace";
-import { normalizeLocalChannels, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { resolveModelChannelId, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { nanoid } from "nanoid";
 import { formatBytes, formatDuration, getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
@@ -899,7 +900,7 @@ export default function ImagePage() {
         setPrompt(log.prompt);
         setReferences(log.references || []);
         const nextModel = log.config.imageModel || log.model;
-        const nextChannelId = resolveImageChannelId(effectiveConfig, nextModel, imageTaskChannelId(log.task), log.config.imageChannelId, log.config.activeChannelId);
+        const nextChannelId = resolveModelChannelId(effectiveConfig, nextModel, imageTaskChannelId(log.task), log.config.imageChannelId, log.config.activeChannelId);
         if (nextModel) updateConfig("imageModel", nextModel);
         if (nextChannelId) {
             updateConfig("imageChannelId", nextChannelId);
@@ -928,7 +929,7 @@ export default function ImagePage() {
         }
         const baseConfig = { ...effectiveConfig, ...configOverride };
         const requestModel = configOverride?.imageModel || configOverride?.model || model;
-        const requestChannelId = resolveImageChannelId(baseConfig, requestModel, configOverride?.imageChannelId, configOverride?.activeChannelId, baseConfig.imageChannelId, baseConfig.activeChannelId);
+        const requestChannelId = resolveModelChannelId(baseConfig, requestModel, configOverride?.imageChannelId, configOverride?.activeChannelId, baseConfig.imageChannelId, baseConfig.activeChannelId);
         if (!isAiConfigReady(baseConfig, requestModel)) {
             message.warning("请先完成配置");
             openConfigDialog(true);
@@ -2161,19 +2162,6 @@ function HistoryLogCard({
     );
 }
 
-function ReferenceThumbnailOverlay({ references, className = "" }: { references?: ReferenceImage[]; className?: string }) {
-    const visibleReferences = (references || []).filter((item) => Boolean(item.dataUrl)).slice(0, 3);
-    if (!visibleReferences.length) return null;
-    return (
-        <div className={`absolute z-10 flex items-center gap-1 rounded-md bg-black/55 p-1 shadow-sm backdrop-blur ${className}`}>
-            {visibleReferences.map((item) => (
-                <img key={item.id} src={item.dataUrl} alt={item.name} className="size-7 rounded border border-white/60 object-cover" />
-            ))}
-            {(references || []).length > visibleReferences.length ? <span className="px-1 text-[10px] text-white">+{(references || []).length - visibleReferences.length}</span> : null}
-        </div>
-    );
-}
-
 function createPendingResult(id: string, snapshot: RequestSnapshot): GenerationResult {
     return {
         id,
@@ -2646,17 +2634,6 @@ function normalizeLogConfig(log: Partial<GenerationLog>): GenerationLogConfig {
 
 function imageTaskChannelId(task?: CanvasImageTask | null) {
     return task?.userChannelId || task?.channelId || "";
-}
-
-function resolveImageChannelId(config: AiConfig, model: string, ...preferredIds: Array<string | undefined>) {
-    const channels = config.channelMode === "remote"
-        ? config.publicChannels.map((channel) => ({ id: channel.id || "", models: channel.models || [] }))
-        : normalizeLocalChannels(config).map((channel) => ({ id: channel.id, models: channel.models }));
-    for (const id of preferredIds) {
-        const channelId = (id || "").trim();
-        if (channelId && channels.some((channel) => channel.id === channelId && channel.models.includes(model))) return channelId;
-    }
-    return channels.find((channel) => channel.models.includes(model))?.id || "";
 }
 
 function buildGenerationLogConfig(config: AiConfig): GenerationLogConfig {

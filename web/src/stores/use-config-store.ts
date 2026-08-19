@@ -567,6 +567,17 @@ export function channelIdForActiveModel(config: AiConfig) {
     return config.imageChannelId;
 }
 
+export function resolveModelChannelId(config: AiConfig, model: string, ...preferredIds: Array<string | undefined>) {
+    const channels = config.channelMode === "remote"
+        ? config.publicChannels.map((channel) => ({ id: channel.id || "", models: channel.models || [] }))
+        : normalizeLocalChannels(config).map((channel) => ({ id: channel.id, models: channel.models }));
+    for (const id of preferredIds) {
+        const channelId = (id || "").trim();
+        if (channelId && channels.some((channel) => channel.id === channelId && channel.models.includes(model))) return channelId;
+    }
+    return channels.find((channel) => channel.models.includes(model))?.id || "";
+}
+
 export function isKimiK3Model(model: string) {
     return model.trim().toLowerCase() === KIMI_K3_MODEL;
 }
