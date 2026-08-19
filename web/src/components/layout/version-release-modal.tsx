@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react";
 import { Modal, Tag, Timeline } from "antd";
 import { useVersionCheck } from "@/hooks/use-version-check";
-import { APP_VERSION } from "@/constant/env";
+import { APP_REPOSITORY_NAME, APP_REPOSITORY_URL, APP_VERSION } from "@/constant/env";
 
 function getTagColor(type: string) {
     if (type === "新增") return "green";
@@ -45,7 +45,7 @@ export function VersionReleaseModal({ className, style }: VersionReleaseModalPro
                 className={className || "shrink-0 cursor-pointer text-xs font-medium text-stone-500 transition hover:text-stone-950 dark:text-stone-400 dark:hover:text-white"}
                 style={style}
                 onClick={openReleaseModal}
-                title="查看版本更新"
+                title={`查看 ${APP_REPOSITORY_NAME} 的版本更新`}
             >
                 <span className="relative inline-flex">
                     {APP_VERSION}
@@ -57,6 +57,9 @@ export function VersionReleaseModal({ className, style }: VersionReleaseModalPro
                     <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
                         <div className="text-xs text-stone-500 dark:text-stone-400">当前版本</div>
                         <div className="mt-1 text-base font-semibold text-stone-950 dark:text-stone-100">{APP_VERSION}</div>
+                        <a className="mt-1 inline-block text-xs text-stone-500 underline-offset-2 transition hover:text-stone-950 hover:underline dark:text-stone-400 dark:hover:text-stone-100" href={APP_REPOSITORY_URL} target="_blank" rel="noreferrer">
+                            {APP_REPOSITORY_NAME}
+                        </a>
                     </div>
                     <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
                         <div className="flex items-center justify-between gap-3">

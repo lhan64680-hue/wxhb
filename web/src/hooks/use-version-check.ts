@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { App } from "antd";
-import { APP_VERSION } from "@/constant/env";
+import { APP_RAW_CONTENT_URL, APP_VERSION } from "@/constant/env";
 import { parseChangelog, type ReleaseInfo } from "@/lib/release";
 
-const latestVersionUrl = "https://raw.githubusercontent.com/tigerowo/infinite-canvas/main/VERSION";
-const latestChangelogUrl = "https://raw.githubusercontent.com/tigerowo/infinite-canvas/main/CHANGELOG.md";
+const latestVersionUrl = `${APP_RAW_CONTENT_URL}/VERSION`;
+const latestChangelogUrl = `${APP_RAW_CONTENT_URL}/CHANGELOG.md`;
 
 function readLocalReleases(): ReleaseInfo[] {
     try {

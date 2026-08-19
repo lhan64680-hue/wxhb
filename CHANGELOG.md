@@ -2,6 +2,7 @@
 
 ## Unreleased
 
++ [调整] 顶部版本检查与 GitHub 入口切换至 `lhan64680-hue/wxhb` 仓库
 + [修复] MiniMax-H3 首尾帧转译参数错误问题
 + [修复] 修复后台对象存储 S3/R2 与 WebDAV 配置开关启用互斥失效，同时启用的问题
 
