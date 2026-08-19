@@ -29,7 +29,7 @@ func UploadLocalTopazVideo(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	result, err := service.CreateTopazVideoUpload(file, header.Filename, header.Header.Get("Content-Type"))
 	if err != nil {
-		FailError(w, err)
+		Fail(w, err.Error())
 		return
 	}
 	OK(w, result)
@@ -43,7 +43,7 @@ func CreateLocalTopazVideoTask(w http.ResponseWriter, r *http.Request) {
 	}
 	task, err := service.CreateTopazVideoTask(input)
 	if err != nil {
-		FailError(w, err)
+		Fail(w, err.Error())
 		return
 	}
 	OK(w, task)
@@ -52,7 +52,7 @@ func CreateLocalTopazVideoTask(w http.ResponseWriter, r *http.Request) {
 func LocalTopazVideoTask(w http.ResponseWriter, _ *http.Request, id string) {
 	task, err := service.GetTopazVideoTask(strings.TrimSpace(id))
 	if err != nil {
-		FailError(w, err)
+		Fail(w, err.Error())
 		return
 	}
 	OK(w, task)
@@ -61,7 +61,7 @@ func LocalTopazVideoTask(w http.ResponseWriter, _ *http.Request, id string) {
 func CancelLocalTopazVideoTask(w http.ResponseWriter, _ *http.Request, id string) {
 	task, err := service.CancelTopazVideoTask(strings.TrimSpace(id))
 	if err != nil {
-		FailError(w, err)
+		Fail(w, err.Error())
 		return
 	}
 	OK(w, task)

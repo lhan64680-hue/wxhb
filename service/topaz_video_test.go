@@ -60,6 +60,23 @@ func TestBuildTopazCommandDisablesModelDownloadAndUsesDetectedDecoder(t *testing
 	}
 }
 
+func TestValidateTopazTaskInputRequiresBrowserVideoDimensions(t *testing.T) {
+	err := validateTopazTaskInput(
+		TopazVideoTaskInput{
+			InputID:       "0e4f21e8-7890-4d4c-8d6d-39e3ed49d71b",
+			Model:         "prob-4",
+			Target:        "1080p",
+			Quality:       "balanced",
+			Interpolation: "none",
+			Slowdown:      "1x",
+		},
+		[]TopazVideoModel{{ID: "prob-4"}},
+	)
+	if err == nil || !strings.Contains(err.Error(), "分辨率") {
+		t.Fatalf("missing video dimensions must be rejected before any ffprobe fallback, got %v", err)
+	}
+}
+
 func containsTopazArgumentPair(arguments []string, option, value string) bool {
 	for index := 0; index+1 < len(arguments); index++ {
 		if arguments[index] == option && arguments[index+1] == value {

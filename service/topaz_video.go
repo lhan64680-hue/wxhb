@@ -87,7 +87,6 @@ type TopazVideoUpload struct {
 type topazInstallation struct {
 	root         string
 	ffmpeg       string
-	ffprobe      string
 	modelDir     string
 	modelDataDir string
 	version      string
@@ -115,7 +114,7 @@ func TopazVideoCapabilitiesInfo() TopazVideoCapabilities {
 	installation := discoverTopazInstallation()
 	models := discoverTopazModels(installation.modelDir)
 	capabilities := TopazVideoCapabilities{
-		Installed:    installation.ffmpeg != "" && installation.ffprobe != "",
+		Installed:    installation.ffmpeg != "",
 		Ready:        installation.ready,
 		Version:      installation.version,
 		Models:       models,
@@ -262,19 +261,10 @@ func (manager *topazVideoManager) runTask(ctx context.Context, taskID string, in
 		manager.finishFailed(taskID, err)
 		return
 	}
+	// Width and height are captured by the browser's video element before upload.
+	// Never execute Topaz's bundled ffprobe here: on this machine it can crash at
+	// process startup and display a Windows error dialog for otherwise valid MP4s.
 	probe := topazProbe{Width: input.SourceWidth, Height: input.SourceHeight, Duration: float64(input.SourceDuration) / 1000, FPS: 24}
-	if probe.Width < 1 || probe.Height < 1 {
-		var err error
-		probe, err = probeTopazVideo(ctx, installation.ffprobe, inputPath)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				manager.finishCanceled(taskID)
-			} else {
-				manager.finishFailed(taskID, err)
-			}
-			return
-		}
-	}
 	width, height, err := resolveTopazTargetDimensions(probe.Width, probe.Height, input.Target)
 	if err != nil {
 		manager.finishFailed(taskID, err)
@@ -526,6 +516,9 @@ func validateTopazTaskInput(input TopazVideoTaskInput, models []TopazVideoModel)
 	if input.Slowdown != "1x" && input.Slowdown != "2x" && input.Slowdown != "4x" {
 		return errors.New("Topaz 慢放倍数无效")
 	}
+	if input.SourceWidth < 1 || input.SourceHeight < 1 {
+		return errors.New("无法读取输入视频分辨率，请重新加载视频后重试")
+	}
 	if input.SourceWidth > 16384 || input.SourceHeight > 16384 {
 		return errors.New("输入视频分辨率超过 Topaz 支持范围")
 	}
@@ -536,11 +529,9 @@ func discoverTopazInstallation() topazInstallation {
 	installation := topazInstallation{}
 	for _, root := range topazInstallCandidates() {
 		ffmpeg := filepath.Join(root, "ffmpeg.exe")
-		ffprobe := filepath.Join(root, "ffprobe.exe")
-		if isRegularFile(ffmpeg) && isRegularFile(ffprobe) {
+		if isRegularFile(ffmpeg) {
 			installation.root = root
 			installation.ffmpeg = ffmpeg
-			installation.ffprobe = ffprobe
 			break
 		}
 	}
@@ -727,43 +718,6 @@ func preferredTopazModel(models []TopazVideoModel) string {
 	return "prob-4"
 }
 
-func probeTopazVideo(ctx context.Context, ffprobe, inputPath string) (topazProbe, error) {
-	command := exec.CommandContext(ctx, ffprobe, "-v", "error", "-show_entries", "stream=codec_type,width,height,duration,avg_frame_rate:format=duration", "-of", "json", inputPath)
-	output, err := command.Output()
-	if err != nil {
-		if ctx.Err() != nil {
-			return topazProbe{}, context.Canceled
-		}
-		return topazProbe{}, errors.New("无法读取输入视频信息")
-	}
-	var payload struct {
-		Streams []struct {
-			CodecType   string `json:"codec_type"`
-			Width       int    `json:"width"`
-			Height      int    `json:"height"`
-			Duration    string `json:"duration"`
-			AverageRate string `json:"avg_frame_rate"`
-		} `json:"streams"`
-		Format struct {
-			Duration string `json:"duration"`
-		} `json:"format"`
-	}
-	if json.Unmarshal(output, &payload) != nil {
-		return topazProbe{}, errors.New("Topaz ffprobe 返回了无效数据")
-	}
-	for _, stream := range payload.Streams {
-		if stream.CodecType != "video" || stream.Width < 1 || stream.Height < 1 {
-			continue
-		}
-		duration := finiteFloat(stream.Duration)
-		if duration <= 0 {
-			duration = finiteFloat(payload.Format.Duration)
-		}
-		return topazProbe{Width: stream.Width, Height: stream.Height, Duration: duration, FPS: parseFrameRate(stream.AverageRate)}, nil
-	}
-	return topazProbe{}, errors.New("输入文件不包含有效的视频流")
-}
-
 func resolveTopazTargetDimensions(width, height int, target string) (int, int, error) {
 	if width < 1 || height < 1 {
 		return 0, 0, errors.New("无法读取输入视频尺寸")
@@ -879,26 +833,6 @@ func topazMimeType(extension string) string {
 }
 
 func evenDimension(value float64) int { return int(math.Max(16, math.Floor(value/2)*2)) }
-
-func finiteFloat(value string) float64 {
-	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) || parsed < 0 {
-		return 0
-	}
-	return parsed
-}
-
-func parseFrameRate(value string) float64 {
-	parts := strings.Split(strings.TrimSpace(value), "/")
-	if len(parts) == 2 {
-		numerator, numeratorErr := strconv.ParseFloat(parts[0], 64)
-		denominator, denominatorErr := strconv.ParseFloat(parts[1], 64)
-		if numeratorErr == nil && denominatorErr == nil && denominator > 0 {
-			return numerator / denominator
-		}
-	}
-	return 24
-}
 
 func humanizeTopazError(lines []string) string {
 	text := strings.Join(lines, "\n")
