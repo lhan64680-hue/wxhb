@@ -23,6 +23,11 @@ export type H3PromptOptimizationResult = {
 
 type H3PromptMode = "T2VA" | "I2VA" | "FL2VA" | "L2VA" | "Ref2VA";
 
+// Moonshot 的 kimi-k3 接口目前仅接受 temperature=1。
+// H3 每次提交都会默认调用此优化器；这里必须保持该固定值，
+// 否则请求会失败并降级为本地模板。
+export const KIMI_K3_OPTIMIZER_TEMPERATURE = 1;
+
 type ChatCompletionPayload = {
     code?: number;
     msg?: string;
@@ -47,7 +52,7 @@ export async function optimizeMiniMaxH3Prompt(config: AiConfig, input: H3PromptO
             body: JSON.stringify({
                 model: KIMI_K3_MODEL,
                 stream: false,
-                temperature: 0.2,
+                temperature: KIMI_K3_OPTIMIZER_TEMPERATURE,
                 messages: [{ role: "system", content: h3PromptSystemInstruction(mode) }, h3PromptUserMessage(input, mode)],
             }),
         });
