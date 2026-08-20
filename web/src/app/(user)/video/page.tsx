@@ -44,6 +44,7 @@ import { formatBytes, formatDuration } from "@/lib/image-utils";
 import { boolConfig, isSeedanceVideoConfig, normalizeSeedanceRatio, seedanceReferenceLabel, seedanceVideoReferenceError, seedanceVideoReferenceHint, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
 import { modelKey, supportsVideoAudioGeneration, supportsVideoFrameReferences } from "@/lib/video-model-capabilities";
 import { deleteStoredMedia, downloadRemoteMedia, resolveMediaUrl, uploadMediaFile, uploadRemoteMediaToServer } from "@/services/file-storage";
+import { optimizeMiniMaxH3Prompt } from "@/services/h3-prompt-optimizer";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { deleteVideoGenerationLogs, fetchVideoGenerationLogs, saveVideoGenerationLogs } from "@/services/api/generation-logs";
 import { createVideoGenerationTask, deleteVideoGenerationTask, listVideoGenerationTasks, pollVideoGenerationTaskStatus, VIDEO_POLL_INTERVAL_MS, VideoRequestError, type VideoResponse } from "@/services/api/video";
@@ -711,25 +712,35 @@ export default function VideoPage() {
         audioReferences: ReferenceAudio[];
         taskCount: number;
     }) => {
+        const optimizedSnapshot = await optimizeH3GenerationSnapshot(snapshot);
         setRunning(true);
         setPreviewLog(null);
         setNow(Date.now());
-        const pendingLogs = Array.from({ length: snapshot.taskCount }, () => {
+        const pendingLogs = Array.from({ length: optimizedSnapshot.taskCount }, () => {
             const clientTaskId = `client_video_task_${nanoid()}`;
-            const task: VideoResponse = { id: clientTaskId, task_id: clientTaskId, model: snapshot.model, status: "queued", progress: 0, created_at: Date.now(), size: snapshot.config.size, seconds: snapshot.config.videoSeconds };
+            const task: VideoResponse = {
+                id: clientTaskId,
+                task_id: clientTaskId,
+                model: optimizedSnapshot.model,
+                status: "queued",
+                progress: 0,
+                created_at: Date.now(),
+                size: optimizedSnapshot.config.size,
+                seconds: optimizedSnapshot.config.videoSeconds,
+            };
             return buildLog({
-                prompt: snapshot.text,
-                model: snapshot.model,
-                config: snapshot.config,
-                references: snapshot.references,
-                firstFrame: snapshot.firstFrame,
-                lastFrame: snapshot.lastFrame,
-                videoReferences: snapshot.videoReferences,
-                audioReferences: snapshot.audioReferences,
+                prompt: optimizedSnapshot.text,
+                model: optimizedSnapshot.model,
+                config: optimizedSnapshot.config,
+                references: optimizedSnapshot.references,
+                firstFrame: optimizedSnapshot.firstFrame,
+                lastFrame: optimizedSnapshot.lastFrame,
+                videoReferences: optimizedSnapshot.videoReferences,
+                audioReferences: optimizedSnapshot.audioReferences,
                 durationMs: 0,
                 status: "生成中",
                 task,
-                taskCount: snapshot.taskCount,
+                taskCount: optimizedSnapshot.taskCount,
                 lastPolledAt: Date.now(),
             });
         });
@@ -737,7 +748,7 @@ export default function VideoPage() {
         setLogs((value) => sortVideoLogs([...pendingLogs, ...value]));
         setResults((value) => sortVideoResults([...pendingLogs.map((log) => createResultFromLog(log, "pending")), ...value]));
         try {
-            const settled = await Promise.allSettled(pendingLogs.map((log) => runVideoTask(log, snapshot)));
+            const settled = await Promise.allSettled(pendingLogs.map((log) => runVideoTask(log, optimizedSnapshot)));
             const nextLogs = settled.map((item) => (item.status === "fulfilled" ? item.value : null)).filter((item): item is NonNullable<typeof item> => Boolean(item));
             const storedLogs = await readStoredLogs();
             setLogs(storedLogs);
@@ -748,6 +759,34 @@ export default function VideoPage() {
         } finally {
             setRunning(false);
         }
+    };
+
+    const optimizeH3GenerationSnapshot = async (snapshot: {
+        text: string;
+        model: string;
+        config: AiConfig;
+        references: ReferenceImage[];
+        firstFrame?: ReferenceImage | null;
+        lastFrame?: ReferenceImage | null;
+        videoReferences: ReferenceVideo[];
+        audioReferences: ReferenceAudio[];
+        taskCount: number;
+    }) => {
+        if (!isMiniMaxH3Model(snapshot.model)) return snapshot;
+        const h3GenerationMode = resolveH3GenerationMode(snapshot);
+        const optimized = await optimizeMiniMaxH3Prompt(snapshot.config, {
+            prompt: snapshot.text,
+            seconds: snapshot.config.videoSeconds,
+            h3GenerationMode,
+            referenceImages: snapshot.references,
+            firstFrame: snapshot.firstFrame || null,
+            lastFrame: snapshot.lastFrame || null,
+            referenceVideos: snapshot.videoReferences,
+            referenceAudios: snapshot.audioReferences,
+        });
+        if (optimized.source === "kimi-k3") message.info("H3 提示词已由 Kimi K3 按官方规则优化");
+        else if (optimized.warning) message.warning(optimized.warning);
+        return { ...snapshot, text: optimized.prompt, config: { ...snapshot.config, h3GenerationMode } };
     };
 
     const runVideoTask = async (
@@ -3266,6 +3305,17 @@ function buildVideoConfig(config: AiConfig, model: string): AiConfig {
         videoWatermark: String(boolConfig(config.videoWatermark, false)),
         videoCharacterOrientation: normalizeCharacterOrientation(config.videoCharacterOrientation),
     };
+}
+
+function isMiniMaxH3Model(model: string) {
+    const key = modelKey(model);
+    return key === "minimax-h3" || key.startsWith("minimax-h3-");
+}
+
+function resolveH3GenerationMode(snapshot: { model: string; config: AiConfig; videoReferences: ReferenceVideo[]; audioReferences: ReferenceAudio[] }): "standard" | "multi-reference" | "turbo-4step" {
+    if (snapshot.config.h3GenerationMode === "turbo-4step") return "turbo-4step";
+    if (snapshot.config.h3GenerationMode === "multi-reference" || modelKey(snapshot.model).includes("reference-to-video") || snapshot.videoReferences.length || snapshot.audioReferences.length) return "multi-reference";
+    return "standard";
 }
 
 function videoTaskChannelId(task?: VideoResponse | null) {
