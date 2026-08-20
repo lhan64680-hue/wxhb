@@ -139,7 +139,7 @@ func LocalGRSAIDraw(w http.ResponseWriter, r *http.Request, action string) {
 		return
 	}
 
-	body, contentType, _, err := readAIRequest(r)
+	body, contentType, err := readGRSAIDrawRequest(r)
 	if err != nil {
 		FailWithStatus(w, http.StatusBadRequest, "GRS 图像请求读取失败")
 		return
@@ -584,6 +584,17 @@ func readAIRequest(r *http.Request) ([]byte, string, string, error) {
 		return nil, "", "", errMissingModel
 	}
 	return body, contentType, modelName, nil
+}
+
+// GRS creates require a model, but /draw/result only accepts a task ID.
+// Do not use readAIRequest here: its shared model requirement rejects normal
+// result polling before the request reaches the GRS service.
+func readGRSAIDrawRequest(r *http.Request) ([]byte, string, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	return body, r.Header.Get("Content-Type"), nil
 }
 
 func readMultipartModel(body []byte, contentType string) string {
