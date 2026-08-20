@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -20,5 +21,20 @@ func TestReadGRSAIDrawRequestAllowsResultPollingWithoutModel(t *testing.T) {
 	}
 	if contentType != "application/json" {
 		t.Fatalf("content type = %q", contentType)
+	}
+}
+
+func TestDirectGRSAIAddressesIgnoreProxyVirtualIPs(t *testing.T) {
+	response := grsaiDNSResponse{
+		Status: 0,
+		Answer: []grsaiDNSAnswer{
+			{Type: 1, Data: "198.18.0.139"},
+			{Type: 1, Data: "114.66.59.231"},
+			{Type: 1, Data: "110.42.111.33"},
+		},
+	}
+
+	if got, want := directGRSAIAddresses(response), []string{"114.66.59.231", "110.42.111.33"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("directGRSAIAddresses() = %v, want %v", got, want)
 	}
 }

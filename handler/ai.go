@@ -2,6 +2,8 @@ package handler
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tigerowo/infinite-canvas/model"
@@ -23,6 +26,28 @@ const localKimiAPIKeyHeader = "X-Local-Kimi-API-Key"
 const localKimiBaseURLHeader = "X-Local-Kimi-Base-URL"
 const localGRSAIAPIKeyHeader = "X-Local-GRSAI-API-Key"
 const localGRSAIBaseURLHeader = "X-Local-GRSAI-Base-URL"
+const grsaiDirectDNSName = "dns.alidns.com"
+const grsaiDirectDNSBootstrapIP = "223.5.5.5"
+
+type grsaiDNSAnswer struct {
+	Type int    `json:"type"`
+	Data string `json:"data"`
+}
+
+type grsaiDNSResponse struct {
+	Status int              `json:"Status"`
+	Answer []grsaiDNSAnswer `json:"Answer"`
+}
+
+type grsaiDirectAddressCacheEntry struct {
+	addresses []string
+	expiresAt time.Time
+}
+
+var grsaiDirectAddressCache = struct {
+	sync.Mutex
+	entries map[string]grsaiDirectAddressCacheEntry
+}{entries: make(map[string]grsaiDirectAddressCacheEntry)}
 
 func selectAIRequestChannel(user model.AuthUser, modelName string, channelID string, userChannelID string) (model.ModelChannel, string, error) {
 	userChannelID = strings.TrimSpace(userChannelID)
@@ -153,8 +178,7 @@ func LocalGRSAIDraw(w http.ResponseWriter, r *http.Request, action string) {
 	request.Header.Set("Authorization", "Bearer "+apiKey)
 	request.Header.Set("Content-Type", firstNonEmpty(contentType, "application/json"))
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
+	transport := newDirectGRSAITransport()
 	response, err := (&http.Client{Timeout: 180 * time.Second, Transport: transport}).Do(request)
 	if err != nil {
 		log.Printf("local GRS draw request failed: %v", err)
@@ -173,6 +197,100 @@ func LocalGRSAIDraw(w http.ResponseWriter, r *http.Request, action string) {
 	}
 	w.WriteHeader(response.StatusCode)
 	copyAIResponseBody(w, response.Body)
+}
+
+// newDirectGRSAITransport bypasses system fake-IP DNS mappings (such as
+// 198.18.0.0/15) while keeping TLS validation bound to GRS's official hostname.
+func newDirectGRSAITransport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	dialer := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil || (host != "grsai.dakka.com.cn" && host != "grsaiapi.com") {
+			return dialer.DialContext(ctx, network, address)
+		}
+
+		addresses, err := resolveDirectGRSAIAddresses(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		var lastErr error
+		for _, ip := range addresses {
+			connection, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
+			if err == nil {
+				return connection, nil
+			}
+			lastErr = err
+		}
+		return nil, fmt.Errorf("GRS AI 国内直连地址不可达: %w", lastErr)
+	}
+	return transport
+}
+
+func resolveDirectGRSAIAddresses(ctx context.Context, host string) ([]string, error) {
+	grsaiDirectAddressCache.Lock()
+	entry, cached := grsaiDirectAddressCache.entries[host]
+	grsaiDirectAddressCache.Unlock()
+	if cached && time.Now().Before(entry.expiresAt) {
+		return entry.addresses, nil
+	}
+
+	lookupContext, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(lookupContext, http.MethodGet, "https://"+grsaiDirectDNSName+"/resolve?name="+url.QueryEscape(host)+"&type=A", nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Accept", "application/dns-json")
+	bootstrapTransport := http.DefaultTransport.(*http.Transport).Clone()
+	bootstrapTransport.Proxy = nil
+	bootstrapTransport.TLSClientConfig = &tls.Config{ServerName: grsaiDirectDNSName, MinVersion: tls.VersionTLS12}
+	bootstrapDialer := &net.Dialer{Timeout: 10 * time.Second}
+	bootstrapTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		_, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, err
+		}
+		return bootstrapDialer.DialContext(ctx, network, net.JoinHostPort(grsaiDirectDNSBootstrapIP, port))
+	}
+	response, err := (&http.Client{Timeout: 10 * time.Second, Transport: bootstrapTransport}).Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("GRS AI 直连 DNS 查询失败: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GRS AI 直连 DNS 查询返回 HTTP %d", response.StatusCode)
+	}
+	var payload grsaiDNSResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64*1024)).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("GRS AI 直连 DNS 响应无效: %w", err)
+	}
+	addresses := directGRSAIAddresses(payload)
+	if payload.Status != 0 || len(addresses) == 0 {
+		return nil, fmt.Errorf("GRS AI 直连 DNS 未返回公网地址")
+	}
+	grsaiDirectAddressCache.Lock()
+	grsaiDirectAddressCache.entries[host] = grsaiDirectAddressCacheEntry{addresses: addresses, expiresAt: time.Now().Add(5 * time.Minute)}
+	grsaiDirectAddressCache.Unlock()
+	return addresses, nil
+}
+
+func directGRSAIAddresses(payload grsaiDNSResponse) []string {
+	addresses := make([]string, 0, len(payload.Answer))
+	for _, answer := range payload.Answer {
+		ip := net.ParseIP(answer.Data)
+		if answer.Type != 1 || ip == nil || isGRSAIFakeIP(ip) {
+			continue
+		}
+		addresses = append(addresses, ip.String())
+	}
+	return addresses
+}
+
+func isGRSAIFakeIP(ip net.IP) bool {
+	v4 := ip.To4()
+	return v4 != nil && v4[0] == 198 && (v4[1] == 18 || v4[1] == 19)
 }
 
 func isLoopbackRequest(r *http.Request) bool {
