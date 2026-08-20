@@ -58,6 +58,7 @@ import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { CANVAS_ASSET_DRAG_TYPE, CanvasSidePanel } from "../components/canvas-side-panel";
 import { DEFAULT_CANVAS_AGENT_PANEL, DEFAULT_CANVAS_SIDE_PANEL, useCanvasStore } from "../stores/use-canvas-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
+import { shouldStopLocalImageTaskWithoutResult } from "../utils/canvas-local-image-task";
 import { buildCanvasAgentContext } from "../agent/canvas-agent-context";
 import type { CanvasAgentAction, CanvasAgentToolResult } from "../agent/canvas-agent-tools";
 import {
@@ -600,27 +601,6 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 // GRS and other local channels manage their own request/result loop. Polling the
                 // account task API here can overwrite their in-flight state with a stale cloud task.
                 if (node.metadata.imageTaskTransport === "local" || isLocalImageTaskTransport(generationConfig)) {
-                    // A local request cannot be resumed after a browser refresh because the upstream
-                    // task ID remains in the in-memory relay loop. Do not leave an old, impossible
-                    // 100% state spinning forever; surface it as retryable instead.
-                    if ((node.metadata.progress || 0) >= 100) {
-                        setNodes((prev) =>
-                            prev.map((item) =>
-                                item.id === node.id && item.metadata?.status === NODE_STATUS_LOADING && !item.metadata.content
-                                    ? {
-                                          ...item,
-                                          metadata: {
-                                              ...item.metadata,
-                                              status: NODE_STATUS_ERROR,
-                                              progress: 99,
-                                              durationMs: Date.now() - (item.metadata.startedAt || Date.now()),
-                                              errorDetails: "本地直连图片任务未返回图片，已停止等待。请点击重试。",
-                                          },
-                                      }
-                                    : item,
-                            ),
-                        );
-                    }
                     return;
                 }
                 pollingImageNodeIdsRef.current.add(node.id);
@@ -5382,7 +5362,26 @@ function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | undefine
 }
 
 function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
-    return nodes.map((node) => (node.metadata?.status === "loading" && !canvasRecoverableTaskId(node) ? { ...node, metadata: { ...node.metadata, status: "error" as const, errorDetails: "页面刷新后生成已中断，请重新生成。" } } : node));
+    return nodes.map((node) => {
+        const interruptedLocalImageTask =
+            isCanvasImageNodeType(node.type) &&
+            shouldStopLocalImageTaskWithoutResult({
+                hasContent: Boolean(node.metadata?.content),
+                isLocalTransport: node.metadata?.imageTaskTransport === "local",
+                isRestoring: true,
+                progress: node.metadata?.progress,
+                status: node.metadata?.status,
+            });
+        if (!interruptedLocalImageTask && (node.metadata?.status !== "loading" || canvasRecoverableTaskId(node))) return node;
+        return {
+            ...node,
+            metadata: {
+                ...node.metadata,
+                status: "error" as const,
+                errorDetails: interruptedLocalImageTask ? "本地直连图片任务因页面刷新中断，请重新生成。" : "页面刷新后生成已中断，请重新生成。",
+            },
+        };
+    });
 }
 
 function canvasRecoverableTaskId(node: CanvasNodeData) {
