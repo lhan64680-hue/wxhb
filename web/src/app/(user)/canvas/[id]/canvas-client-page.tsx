@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight, Home, ImageIcon, Images, List, Menu, Bot, Mu
 import { saveAs } from "file-saver";
 
 import { deleteCanvasProjects, deleteCanvasTasks } from "@/services/api/canvas-tasks";
-import { createCanvasImageTask, pollCanvasImageTaskStatus, requestImageQuestion, type CanvasImageTask } from "@/services/api/image";
+import { createCanvasImageTask, isLocalImageTaskTransport, pollCanvasImageTaskStatus, requestImageQuestion, type CanvasImageTask } from "@/services/api/image";
 import { createCanvasAudioTask, pollCanvasAudioTaskStatus, type CanvasAudioTask } from "@/services/api/audio";
 import { createVideoGenerationTask, pollVideoGenerationTaskStatus, VIDEO_POLL_INTERVAL_MS, type VideoResponse } from "@/services/api/video";
 import { createTopazVideoTask, getTopazVideoCapabilities, getTopazVideoTask, type TopazVideoCapabilities, type TopazVideoTask } from "@/services/api/topaz-video";
@@ -596,6 +596,10 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             const imageTargets = nodesRef.current.filter((node) => isCanvasImageNodeType(node.type) && node.metadata?.status === NODE_STATUS_LOADING && !node.metadata.content && node.metadata.imageTaskId);
             imageTargets.forEach((node) => {
                 if (pollingImageNodeIdsRef.current.has(node.id) || !node.metadata?.imageTaskId) return;
+                const generationConfig = buildGenerationConfig(effectiveConfig, node, "image");
+                // GRS and other local channels manage their own request/result loop. Polling the
+                // account task API here can overwrite their in-flight state with a stale cloud task.
+                if (node.metadata.imageTaskTransport === "local" || isLocalImageTaskTransport(generationConfig)) return;
                 pollingImageNodeIdsRef.current.add(node.id);
                 void pollCanvasImageTaskStatus(node.metadata.imageTaskId)
                     .then((task) => {
@@ -4850,6 +4854,7 @@ function buildImageGenerationMetadata(type: CanvasImageGenerationType, config: A
         size: config.size,
         quality: config.quality,
         count,
+        imageTaskTransport: isLocalImageTaskTransport(config) ? "local" : "remote",
         references: references.map(referenceUrl).filter((url): url is string => Boolean(url)),
     };
 }
@@ -5137,15 +5142,18 @@ function applyCanvasVideoTaskUpdate(nodes: CanvasNodeData[], nodeId: string, tas
 function applyCanvasImageTaskUpdate(nodes: CanvasNodeData[], nodeId: string, task: CanvasImageTask, startedAt: number, fallbackSize: { width: number; height: number }) {
     return nodes.map((node) => {
         if (node.id !== nodeId) return node;
-        const progress = typeof task.progress === "number" ? Math.max(0, Math.min(100, task.progress)) : node.metadata?.progress || 0;
+        const reportedProgress = typeof task.progress === "number" ? Math.max(0, Math.min(100, task.progress)) : node.metadata?.progress || 0;
         const url = task.image_url || task.url || "";
         const completed = canvasTaskCompleted(task.status) || Boolean(url);
-        const failed = canvasTaskFailed(task.status) || (completed && !url);
+        const completedWithoutImage = completed && !url;
+        const impossibleFullProgress = !completed && !canvasTaskFailed(task.status) && reportedProgress >= 100 && !url;
+        const failed = canvasTaskFailed(task.status) || completedWithoutImage || impossibleFullProgress;
+        const progress = failed ? Math.min(99, reportedProgress) : completed ? 100 : Math.min(99, reportedProgress);
         const taskStartedAt = parseCanvasTaskTime(task.started_at ?? task.startedAt ?? task.created_at ?? task.createdAt) || startedAt;
         const metadata: CanvasNodeMetadata = {
             ...node.metadata,
             status: failed ? NODE_STATUS_ERROR : completed ? NODE_STATUS_SUCCESS : NODE_STATUS_LOADING,
-            errorDetails: failed ? task.error?.message || "图片生成失败" : undefined,
+            errorDetails: failed ? task.error?.message || (completedWithoutImage || impossibleFullProgress ? "任务未返回图片地址，已停止等待。请重试。" : "图片生成失败") : undefined,
             startedAt: taskStartedAt,
             durationMs: Date.now() - taskStartedAt,
             progress,

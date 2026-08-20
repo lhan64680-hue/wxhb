@@ -24,9 +24,19 @@ type ImageApiResponse = {
 type GrsaiDrawTask = {
     id?: string;
     status?: string;
+    state?: string;
+    task_status?: string;
     progress?: number;
+    percentage?: number;
     url?: string;
-    results?: Array<Record<string, unknown>>;
+    image_url?: string;
+    imageUrl?: string;
+    result_url?: string;
+    results?: unknown;
+    images?: unknown;
+    image_urls?: unknown;
+    output?: unknown;
+    result?: unknown;
     error?: string;
     failure_reason?: string;
 };
@@ -175,7 +185,7 @@ function isGrsaiImageChannel(config: AiConfig) {
 }
 
 function isLocalGrsaiRelay(config: AiConfig) {
-	return isGrsaiImageChannel(config);
+    return isGrsaiImageChannel(config);
 }
 
 /** Kimi keys stay on the local machine: browser -> local Go relay -> Moonshot. */
@@ -198,12 +208,12 @@ function createGrsaiDrawBody(config: AiConfig, prompt: string, urls: string[] = 
 }
 
 function grsaiRelayHeaders(config: AiConfig) {
-	const channel = localChannelForActiveModel(config);
-	return {
-		"X-Local-GRSAI-Base-URL": channel?.baseUrl || config.baseUrl,
-		"X-Local-GRSAI-API-Key": channel?.apiKey || config.apiKey,
-		"Content-Type": "application/json",
-	};
+    const channel = localChannelForActiveModel(config);
+    return {
+        "X-Local-GRSAI-Base-URL": channel?.baseUrl || config.baseUrl,
+        "X-Local-GRSAI-API-Key": channel?.apiKey || config.apiKey,
+        "Content-Type": "application/json",
+    };
 }
 
 function normalizeGrsaiDrawResponse(value: unknown): GrsaiDrawResponse {
@@ -291,9 +301,42 @@ function readGrsaiDrawTask(payload: GrsaiDrawResponse) {
     return payload.data;
 }
 
+function grsaiDrawStatus(task: GrsaiDrawTask) {
+    return (
+        [task.status, task.state, task.task_status]
+            .find((value): value is string => typeof value === "string" && Boolean(value.trim()))
+            ?.trim()
+            .toLowerCase() || ""
+    );
+}
+
+function isGrsaiImageUrl(value: string) {
+    return value.startsWith("data:image/") || /^https?:\/\//i.test(value);
+}
+
+function collectGrsaiImageItems(value: unknown, depth = 0): Array<Record<string, unknown>> {
+    if (depth > 5 || value == null) return [];
+    if (typeof value === "string") return isGrsaiImageUrl(value.trim()) ? [{ url: value.trim() }] : [];
+    if (Array.isArray(value)) return value.flatMap((item) => collectGrsaiImageItems(item, depth + 1));
+    if (typeof value !== "object") return [];
+
+    const record = value as Record<string, unknown>;
+    if (resolveImageDataUrl(record, IMAGE_MIME)) return [record];
+    return ["results", "images", "image_urls", "image_url", "imageUrl", "result_url", "result", "output", "data"].flatMap((key) => collectGrsaiImageItems(record[key], depth + 1));
+}
+
 function parseGrsaiDrawImages(task: GrsaiDrawTask, mime: string) {
-    const data = task.results || (task.url ? [{ url: task.url }] : []);
+    const data = collectGrsaiImageItems(task);
     return parseImagePayload({ data }, mime);
+}
+
+function tryParseGrsaiDrawImages(task: GrsaiDrawTask, mime: string) {
+    try {
+        return parseGrsaiDrawImages(task, mime);
+    } catch (error) {
+        if (error instanceof ImageRequestError && error.message === "接口没有返回图片") return null;
+        throw error;
+    }
 }
 
 function grsaiDrawFailureMessage(task: GrsaiDrawTask) {
@@ -328,16 +371,18 @@ async function requestGrsaiDrawImages(config: AiConfig, prompt: string, referenc
         async (response) => {
             const createdPayload = await readGrsaiDrawResponse(response);
             let task = readGrsaiDrawTask(createdPayload);
-            const initialStatus = (task.status || "").toLowerCase();
-            if (["succeeded", "success", "completed", "done"].includes(initialStatus)) {
-                return { images: parseGrsaiDrawImages(task, mime), responseBody: stringifyLogPayload(createdPayload) };
+            const initialImages = tryParseGrsaiDrawImages(task, mime);
+            if (initialImages?.length) {
+                return { images: initialImages, responseBody: stringifyLogPayload(createdPayload) };
             }
+            const initialStatus = grsaiDrawStatus(task);
             if (["failed", "fail", "error", "cancelled", "canceled"].includes(initialStatus)) {
                 throw new ImageRequestError(grsaiDrawFailureMessage(task), createdPayload);
             }
             if (!task.id) throw new ImageRequestError("GRS 图像任务没有返回任务 ID", createdPayload);
 
             let resultPayload: GrsaiDrawResponse = createdPayload;
+            let completedWithoutImageAt = 0;
             while (Date.now() < deadline) {
                 await new Promise((resolve) => window.setTimeout(resolve, 1500));
                 const remainingSeconds = Math.max(1, Math.ceil((deadline - Date.now()) / 1000));
@@ -355,12 +400,19 @@ async function requestGrsaiDrawImages(config: AiConfig, prompt: string, referenc
                 }
                 resultPayload = await readGrsaiDrawResponse(resultResponse);
                 task = readGrsaiDrawTask(resultPayload);
-                const status = (task.status || "").toLowerCase();
-                if (["succeeded", "success", "completed", "done"].includes(status)) {
-                    return { images: parseGrsaiDrawImages(task, mime), responseBody: stringifyLogPayload(resultPayload) };
+                const images = tryParseGrsaiDrawImages(task, mime);
+                if (images?.length) {
+                    return { images, responseBody: stringifyLogPayload(resultPayload) };
                 }
+                const status = grsaiDrawStatus(task);
                 if (["failed", "fail", "error", "cancelled", "canceled"].includes(status)) {
                     throw new ImageRequestError(grsaiDrawFailureMessage(task), resultPayload);
+                }
+                if (["succeeded", "success", "completed", "done"].includes(status)) {
+                    if (!completedWithoutImageAt) completedWithoutImageAt = Date.now();
+                    if (Date.now() - completedWithoutImageAt >= 10_000) {
+                        throw new ImageRequestError("GRS 图像任务已完成，但未返回图片地址，请重试。", resultPayload);
+                    }
                 }
             }
             throw new ImageRequestError(`请求超时：超过 ${GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS} 秒仍未完成，请稍后重试。`, resultPayload);
@@ -373,11 +425,14 @@ function normalizeBase64Image(value: string, fallbackMime: string) {
 }
 
 function resolveImageDataUrl(item: Record<string, unknown>, mime: string) {
-    if (typeof item.b64_json === "string" && item.b64_json) {
-        return normalizeBase64Image(item.b64_json, mime);
+    for (const key of ["b64_json", "base64", "image_data"]) {
+        const value = item[key];
+        if (typeof value === "string" && value) return normalizeBase64Image(value, mime);
     }
-    if (typeof item.url === "string" && item.url) {
-        return item.url;
+    if (typeof item.url === "string" && item.url) return item.url;
+    for (const key of ["image_url", "imageUrl", "result_url"]) {
+        const value = item[key];
+        if (typeof value === "string" && value && isGrsaiImageUrl(value)) return value;
     }
     return null;
 }
@@ -639,10 +694,15 @@ function withPromptGuard(config: AiConfig, prompt: string) {
 
 function usesAccountProxy(config: AiConfig) {
     const token = useUserStore.getState().token;
-	// GRS GPT Image 2 与 Kimi 都由本机受限中继直连国内节点；旧配置可能仍保留 remote 标记，
-	// 也不能让它误入账号代理后创建一个永不完成的本地任务。
-	if (isLocalKimiRelay(config) || isLocalGrsaiRelay(config)) return false;
+    // GRS GPT Image 2 与 Kimi 都由本机受限中继直连国内节点；旧配置可能仍保留 remote 标记，
+    // 也不能让它误入账号代理后创建一个永不完成的本地任务。
+    if (isLocalKimiRelay(config) || isLocalGrsaiRelay(config)) return false;
     return config.channelMode === "remote" || (config.channelMode === "local" && Boolean(token));
+}
+
+/** Local channels resolve in the browser and must never be resumed by cloud-task polling. */
+export function isLocalImageTaskTransport(config: AiConfig) {
+    return !usesAccountProxy(config);
 }
 
 export function aiApiUrl(config: AiConfig, path: string) {
@@ -670,7 +730,7 @@ export function aiHeaders(config: AiConfig, contentType?: string) {
             ...(contentType ? { "Content-Type": contentType } : {}),
         };
     }
-	if (token && !isLocalGrsaiRelay(config)) {
+    if (token && !isLocalGrsaiRelay(config)) {
         const userChannelId = channelIdForActiveModel(config);
         return {
             Authorization: `Bearer ${token}`,

@@ -80,6 +80,7 @@ export type CanvasNodeMetadata = {
     progress?: number;
     imageTaskId?: string;
     imageTaskResultId?: string;
+    imageTaskTransport?: "local" | "remote";
     audioTaskId?: string;
     audioTaskResultId?: string;
     videoTaskId?: string;
