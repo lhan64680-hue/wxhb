@@ -599,7 +599,30 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 const generationConfig = buildGenerationConfig(effectiveConfig, node, "image");
                 // GRS and other local channels manage their own request/result loop. Polling the
                 // account task API here can overwrite their in-flight state with a stale cloud task.
-                if (node.metadata.imageTaskTransport === "local" || isLocalImageTaskTransport(generationConfig)) return;
+                if (node.metadata.imageTaskTransport === "local" || isLocalImageTaskTransport(generationConfig)) {
+                    // A local request cannot be resumed after a browser refresh because the upstream
+                    // task ID remains in the in-memory relay loop. Do not leave an old, impossible
+                    // 100% state spinning forever; surface it as retryable instead.
+                    if ((node.metadata.progress || 0) >= 100) {
+                        setNodes((prev) =>
+                            prev.map((item) =>
+                                item.id === node.id && item.metadata?.status === NODE_STATUS_LOADING && !item.metadata.content
+                                    ? {
+                                          ...item,
+                                          metadata: {
+                                              ...item.metadata,
+                                              status: NODE_STATUS_ERROR,
+                                              progress: 99,
+                                              durationMs: Date.now() - (item.metadata.startedAt || Date.now()),
+                                              errorDetails: "本地直连图片任务未返回图片，已停止等待。请点击重试。",
+                                          },
+                                      }
+                                    : item,
+                            ),
+                        );
+                    }
+                    return;
+                }
                 pollingImageNodeIdsRef.current.add(node.id);
                 void pollCanvasImageTaskStatus(node.metadata.imageTaskId)
                     .then((task) => {
