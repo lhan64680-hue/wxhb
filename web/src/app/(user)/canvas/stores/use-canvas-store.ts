@@ -54,25 +54,46 @@ type CanvasStore = {
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
 const CANVAS_STORE_KEY = "infinite-canvas:canvas_store";
+const USER_STORE_HYDRATION_TIMEOUT_MS = 2_000;
+const CANVAS_REMOTE_SYNC_TIMEOUT_MS = 4_000;
 type PersistedCanvasState = Pick<CanvasStore, "projects">;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let queuedPersistState: PersistedCanvasState | null = null;
 let accountCanvasSyncEnabled = false;
 const projectSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function waitForUserStoreHydration() {
-    if (useUserStore.persist.hasHydrated()) return Promise.resolve();
+function waitForUserStoreHydration(timeoutMs = USER_STORE_HYDRATION_TIMEOUT_MS) {
+    if (useUserStore.persist.hasHydrated()) return Promise.resolve(true);
 
-    return new Promise<void>((resolve) => {
+    return new Promise<boolean>((resolve) => {
+        let settled = false;
         let unsubscribe = () => {};
-        unsubscribe = useUserStore.persist.onFinishHydration(() => {
+        const finish = (hydrated: boolean) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
             unsubscribe();
-            resolve();
-        });
-        if (useUserStore.persist.hasHydrated()) {
-            unsubscribe();
-            resolve();
-        }
+            resolve(hydrated);
+        };
+        const timeout = setTimeout(() => finish(false), timeoutMs);
+        unsubscribe = useUserStore.persist.onFinishHydration(() => finish(true));
+        if (useUserStore.persist.hasHydrated()) finish(true);
+    });
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+    return new Promise<T>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("canvas remote sync timed out")), timeoutMs);
+        promise.then(
+            (value) => {
+                clearTimeout(timeout);
+                resolve(value);
+            },
+            (error) => {
+                clearTimeout(timeout);
+                reject(error);
+            },
+        );
     });
 }
 
@@ -125,16 +146,26 @@ async function reconcileCanvasProjects(token: string, remoteProjects: CanvasProj
 
 const canvasStorage: PersistStorage<CanvasStore> = {
     getItem: async (name) => {
-        await waitForUserStoreHydration();
-        const localValue = await localForageStorage.getItem(name);
-        const token = useUserStore.getState().token;
-        const localParsed = localValue ? (JSON.parse(localValue) as StorageValue<CanvasStore>) : null;
-        const localProjects = (localParsed?.state as PersistedCanvasState)?.projects || [];
+        // 本地项目优先读取，账户状态或远程同步异常不能阻塞画布打开。
+        const [userStoreHydrated, localValue] = await Promise.all([waitForUserStoreHydration(), withTimeout(Promise.resolve(localForageStorage.getItem(name)), USER_STORE_HYDRATION_TIMEOUT_MS).catch(() => null)]);
+        const token = userStoreHydrated ? useUserStore.getState().token : "";
+        let localParsed: StorageValue<CanvasStore> | null = null;
+        if (localValue) {
+            try {
+                localParsed = JSON.parse(localValue) as StorageValue<CanvasStore>;
+            } catch {
+                // 保留无法解析的旧值，但不要让它阻塞项目库和画布打开。
+                localParsed = null;
+            }
+        }
+        const persistedProjects = (localParsed?.state as PersistedCanvasState | undefined)?.projects;
+        const localProjects = Array.isArray(persistedProjects) ? persistedProjects : [];
+        if (localParsed && !Array.isArray(persistedProjects)) localParsed = null;
         const localHasData = Array.isArray(localProjects) && localProjects.length > 0;
 
         if (token) {
             try {
-                const [userConfig, remoteProjects] = await Promise.all([fetchUserConfig(token), listCanvasProjects(token)]);
+                const [userConfig, remoteProjects] = await withTimeout(Promise.all([fetchUserConfig(token), listCanvasProjects(token)]), CANVAS_REMOTE_SYNC_TIMEOUT_MS);
                 accountCanvasSyncEnabled = userConfig.syncCapabilities?.userData === true;
 
                 if (accountCanvasSyncEnabled && localHasData) {
