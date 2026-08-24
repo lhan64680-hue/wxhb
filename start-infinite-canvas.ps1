@@ -188,17 +188,31 @@ if (-not (Test-ListeningPort 3000)) {
 }
 
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    $frontendReady = $true
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 2
-        if ($response.StatusCode -eq 200) {
-            if (-not $NoBrowser) {
-                Start-Process "http://127.0.0.1:3000"
-            }
-            return
-        }
+        if ($response.StatusCode -ne 200) { $frontendReady = $false }
     } catch {
-        Start-Sleep -Seconds 1
+        $frontendReady = $false
     }
+
+    if ($frontendReady) {
+        try {
+            # 首次访问画布会触发 Next.js 路由编译；启动完成前主动预热，
+            # 避免用户打开应用时误遇到冷编译超时。
+            $canvasResponse = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000/canvas" -TimeoutSec 10
+            if ($canvasResponse.StatusCode -eq 200) {
+                if (-not $NoBrowser) {
+                    Start-Process "http://127.0.0.1:3000"
+                }
+                return
+            }
+        } catch {
+            $frontendReady = $false
+        }
+    }
+
+    Start-Sleep -Seconds 1
 }
 
 throw "The app did not start within 60 seconds. Check logs in $runtimeRoot."
