@@ -203,7 +203,7 @@ for ($attempt = 0; $attempt -lt 60; $attempt++) {
             $canvasResponse = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000/canvas" -TimeoutSec 10
             if ($canvasResponse.StatusCode -eq 200) {
                 if (-not $NoBrowser) {
-                    Start-Process "http://127.0.0.1:3000"
+                    Start-Process "http://127.0.0.1:3000/canvas"
                 }
                 return
             }
