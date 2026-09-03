@@ -36,19 +36,43 @@ function Test-PythonExecutable([string]$FilePath) {
         return $false
     }
 
-    & $FilePath -c "import sys" 2>$null
-    return $LASTEXITCODE -eq 0
-}
-
-function Test-H3SageRuntime {
-    if (-not (Test-PythonExecutable $h3SagePython)) {
+    try {
+        & $FilePath -c "import sys" 2>$null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        # Windows PowerShell treats a broken Python launcher as a terminating
+        # native-command error. Treat it as an unavailable runtime instead of
+        # aborting the entire desktop startup chain.
         return $false
     }
+}
 
-    # The Sage runtime keeps the original H3 packages as a .pth dependency layer.
-    # This verifies the actual CUDA path before using it as the default engine.
-    & $h3SagePython -c "import torch; from sageattention import sageattn; assert torch.cuda.is_available()" 2>$null
-    return $LASTEXITCODE -eq 0
+function Test-HttpReady([string]$Uri, [int]$TimeoutSec) {
+    try {
+        $response = Invoke-WebRequest -UseBasicParsing -Uri $Uri -TimeoutSec $TimeoutSec -ErrorAction Stop
+        return [int]$response.StatusCode -eq 200
+    } catch {
+        return $false
+    }
+}
+
+function Open-CanvasBrowser {
+    $canvasUrl = "http://127.0.0.1:3000/canvas"
+    try {
+        Start-Process -FilePath $canvasUrl -ErrorAction Stop | Out-Null
+        return
+    } catch {
+        # Some Windows desktop policies reject ShellExecute on a URL from
+        # PowerShell. Fall back to the native `start` command so the configured
+        # browser still opens without making the service startup fail.
+        try {
+            Start-Process -FilePath $env:ComSpec -ArgumentList @(
+                "/d", "/c", "start", $canvasUrl
+            ) -WindowStyle Hidden -ErrorAction Stop | Out-Null
+        } catch {
+            Write-Warning "Canvas is ready at $canvasUrl, but the default browser could not be opened automatically."
+        }
+    }
 }
 
 function Sync-H3TurboNode {
@@ -110,7 +134,7 @@ $env:GOCACHE = Join-Path $runtimeRoot "go-build-cache"
 Sync-H3TurboNode
 
 if (-not (Test-ListeningPort 8188)) {
-    if ((Test-Path -LiteralPath $h3EngineApp) -and (Test-H3SageRuntime)) {
+    if ((Test-Path -LiteralPath $h3EngineApp) -and (Test-PythonExecutable $h3SagePython)) {
         $env:HTTP_PROXY = ""
         $env:HTTPS_PROXY = ""
         $env:ALL_PROXY = ""
@@ -188,27 +212,16 @@ if (-not (Test-ListeningPort 3000)) {
 }
 
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
-    $frontendReady = $true
-    try {
-        $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 2
-        if ($response.StatusCode -ne 200) { $frontendReady = $false }
-    } catch {
-        $frontendReady = $false
-    }
+    $frontendReady = Test-HttpReady "http://127.0.0.1:3000" 2
 
     if ($frontendReady) {
-        try {
-            # 首次访问画布会触发 Next.js 路由编译；启动完成前主动预热，
-            # 避免用户打开应用时误遇到冷编译超时。
-            $canvasResponse = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000/canvas" -TimeoutSec 10
-            if ($canvasResponse.StatusCode -eq 200) {
-                if (-not $NoBrowser) {
-                    Start-Process "http://127.0.0.1:3000/canvas"
-                }
-                return
+        # 首次访问画布会触发 Next.js 路由编译；启动完成前主动预热，
+        # 避免用户打开应用时误遇到冷编译超时。
+        if (Test-HttpReady "http://127.0.0.1:3000/canvas" 10) {
+            if (-not $NoBrowser) {
+                Open-CanvasBrowser
             }
-        } catch {
-            $frontendReady = $false
+            return
         }
     }
 
