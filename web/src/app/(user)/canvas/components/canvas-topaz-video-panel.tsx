@@ -46,7 +46,7 @@ export function CanvasTopazVideoPanel({ node, capabilities, isRunning, hasVideoI
                     <select className="h-12 w-full rounded-xl border px-3 text-base outline-none" style={controlStyle} value={model} onChange={(event) => onConfigChange(node.id, { topazModel: event.target.value })}>
                         {(capabilities?.models?.length ? capabilities.models : [{ id: model, name: "Topazlabs", description: "" }]).map((item) => (
                             <option key={item.id} value={item.id}>
-                                {item.name || item.id}
+                                {item.name || item.id}{item.description ? ` · ${item.description}` : ""}
                             </option>
                         ))}
                     </select>

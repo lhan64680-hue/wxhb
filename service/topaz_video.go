@@ -668,16 +668,26 @@ func discoverTopazModels(modelDir string) []TopazVideoModel {
 		return nil
 	}
 	labels := map[string]TopazVideoModel{
-		"prob": {Name: "Proteus", Description: "通用精细增强"},
-		"iris": {Name: "Iris", Description: "人脸与低清素材"},
-		"rhea": {Name: "Rhea", Description: "高质量通用增强"},
-		"ahq":  {Name: "Artemis HQ", Description: "高质量实拍"},
-		"amq":  {Name: "Artemis MQ", Description: "中等质量素材"},
-		"alq":  {Name: "Artemis LQ", Description: "低质量素材"},
-		"aaa":  {Name: "Artemis AA", Description: "锯齿与摩尔纹"},
-		"gcg":  {Name: "Gaia CG", Description: "动画与图形"},
-		"ghq":  {Name: "Gaia HQ", Description: "高质量实拍"},
-		"nyx":  {Name: "Nyx", Description: "降噪"},
+		"prob": {Name: "Proteus", Description: "通用修复·降噪提细节"},
+		"iris": {Name: "Iris", Description: "低清人像·面部修复"},
+		"rhea": {Name: "Rhea", Description: "精细纹理·4倍放大"},
+		"ahq":  {Name: "Artemis HQ", Description: "高清素材·轻度修复"},
+		"amq":  {Name: "Artemis MQ", Description: "中清素材·降噪锐化"},
+		"alq":  {Name: "Artemis LQ", Description: "低清素材·强力修复"},
+		"aaa":  {Name: "Artemis AA", Description: "去锯齿·去摩尔纹"},
+		"alqs": {Name: "ALQS", Description: "低清修复·强去光晕"},
+		"amqs": {Name: "AMQS", Description: "中清修复·去光晕"},
+		"ddv":  {Name: "DDV", Description: "DV录像·去隔行条纹"},
+		"dtd":  {Name: "DTD", Description: "顽固隔行条纹修复"},
+		"dtds": {Name: "DTDS", Description: "顽固条纹·去光晕"},
+		"dtv":  {Name: "DTV", Description: "老电视/DVD·去条纹"},
+		"dtvs": {Name: "DTVS", Description: "老录像·去条纹光晕"},
+		"gcg":  {Name: "Gaia CG", Description: "动画CG·放大保线条"},
+		"ghq":  {Name: "Gaia HQ", Description: "高清实拍·保真放大"},
+		"nyx":  {Name: "Nyx", Description: "低光高噪·保细节降噪"},
+		"thd":  {Name: "THD", Description: "细节优先·增强锐度"},
+		"thf":  {Name: "THF", Description: "保真优先·减少失真"},
+		"thm":  {Name: "THM", Description: "运动模糊修复"},
 	}
 	allowed := map[string]bool{"aaa": true, "ahq": true, "alq": true, "alqs": true, "amq": true, "amqs": true, "ddv": true, "dtd": true, "dtds": true, "dtv": true, "dtvs": true, "gcg": true, "ghq": true, "iris": true, "nyx": true, "prob": true, "rhea": true, "thd": true, "thf": true, "thm": true}
 	models := make([]TopazVideoModel, 0)
@@ -695,6 +705,10 @@ func discoverTopazModels(modelDir string) []TopazVideoModel {
 			label = TopazVideoModel{Name: strings.ToUpper(prefix), Description: "视频增强"}
 		}
 		label.ID = id
+		// Iris 2 is the medium-quality variant; Iris 1 and 3 target low-quality footage.
+		if id == "iris-2" {
+			label.Description = "中清人像·面部修复"
+		}
 		if dash := strings.LastIndex(id, "-"); dash >= 0 {
 			label.Name += " " + id[dash+1:]
 		}
