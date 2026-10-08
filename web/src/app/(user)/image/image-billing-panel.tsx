@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ChevronDown, Coins, RefreshCw } from "lucide-react";
-import { formatCredits, grsaiBillingChannel } from "@/services/api/grsai-billing";
+import { compareImageCredits, formatCredits, grsaiBillingChannel } from "@/services/api/grsai-billing";
+import { grsaiImageSettingsNote } from "@/services/api/grsai-image";
 import { billingEntryForConfig, useImageBillingStore } from "@/stores/use-image-billing-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 
@@ -15,6 +16,7 @@ export function ImageBillingPanel() {
     const [expanded, setExpanded] = useState(false);
     const model = config.imageModel || config.model;
     const price = entry?.data?.models.find((item) => item.name === model);
+    const models = [...(entry?.data?.models || [])].sort((left, right) => compareImageCredits(left.credits, right.credits));
     const count = Math.max(1, Math.min(10, Math.floor(Number(config.count) || 1)));
     const estimated = price?.credits == null ? null : price.credits * count;
     // Do not reuse a cached Key-quota response as account balance after upgrade.
@@ -50,14 +52,15 @@ export function ImageBillingPanel() {
             {expanded ? (
                 <div className="mt-3 max-h-72 overflow-auto rounded-lg border border-border">
                     <table className="w-full text-left text-xs">
-                        <caption className="p-2 text-left text-muted-foreground">GRS 实时目录；展示平台全部生图模型，实际生成使用配置中已接入的模型。按次计费，最终扣费以平台账单为准。</caption>
+                        <caption className="p-2 text-left text-muted-foreground">GRS 实时目录，按生成价格从高到低排列；实际生成使用配置中已接入的模型。按次计费，最终扣费以平台账单为准。</caption>
                         <thead className="sticky top-0 bg-card"><tr><th className="p-2">模型</th><th className="p-2">积分 / 次</th><th className="p-2">异常返还</th><th className="p-2">违规返还</th><th className="p-2">说明</th></tr></thead>
-                        <tbody>{entry?.data?.models.map((item) => <tr key={item.name} className={`border-t border-border ${item.name === model ? "bg-accent" : ""}`}><td className="p-2 font-medium">{item.name}{item.name === model ? " · 当前" : ""}{item.unavailable ? " · 维护中" : ""}</td><td className="whitespace-nowrap p-2 tabular-nums">{item.credits == null ? "未提供" : formatCredits(item.credits)}</td><td className="p-2">{item.errorReturn ? "是" : "否"}</td><td className="p-2">{item.violationReturn ? "是" : "否"}</td><td className="min-w-40 p-2 text-muted-foreground">{item.maintenance || item.description}</td></tr>)}</tbody>
+                        <tbody>{models.map((item) => <tr key={item.name} className={`border-t border-border ${item.name === model ? "bg-accent" : ""}`}><td className="p-2 font-medium">{item.name}{item.name === model ? " · 当前" : ""}{item.unavailable ? " · 维护中" : ""}</td><td className="whitespace-nowrap p-2 tabular-nums">{item.credits == null ? "未提供" : formatCredits(item.credits)}</td><td className="p-2">{item.errorReturn ? "是" : "否"}</td><td className="p-2">{item.violationReturn ? "是" : "否"}</td><td className="min-w-40 p-2 text-muted-foreground">{item.maintenance || item.description}</td></tr>)}</tbody>
                     </table>
                     {!entry?.data?.models.length ? <p className="p-3 text-xs text-muted-foreground">{entry?.loading ? "正在读取模型价格…" : "暂无价格信息，请刷新重试"}</p> : null}
                 </div>
             ) : null}
             <p className="mt-2 text-[11px] text-muted-foreground">显示当前 API Key 所属账户的积分余额，不是 Key 单独设置的额度；每分钟及生成结束后自动刷新。{entry?.data ? `更新于 ${new Date(entry.data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false })}` : ""}</p>
+            {grsaiImageSettingsNote(model) ? <p className="mt-1 text-[11px] text-muted-foreground">{grsaiImageSettingsNote(model)}</p> : null}
         </section>
     );
 }

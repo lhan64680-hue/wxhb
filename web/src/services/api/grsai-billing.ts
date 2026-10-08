@@ -55,3 +55,7 @@ export async function fetchGRSAIBilling(channel: NonNullable<ReturnType<typeof g
 export function formatCredits(value: number) {
     return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value);
 }
+
+export function compareImageCredits(left: number | null | undefined, right: number | null | undefined) {
+    return (right ?? -1) - (left ?? -1);
+}

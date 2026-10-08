@@ -24,6 +24,22 @@ func TestReadGRSAIDrawRequestAllowsResultPollingWithoutModel(t *testing.T) {
 	}
 }
 
+func TestLocalGRSAIDrawEndpointAllowlist(t *testing.T) {
+	for _, action := range []string{"completions", "nano-banana", "result", "unsupported"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/local-ai/grsai/draw/"+action, strings.NewReader(`{}`))
+		req.RemoteAddr = "127.0.0.1:12345"
+		response := httptest.NewRecorder()
+		LocalGRSAIDraw(response, req, action)
+		want := http.StatusBadRequest // Accepted route, missing local credentials; no upstream call.
+		if action == "unsupported" {
+			want = http.StatusNotFound
+		}
+		if response.Code != want {
+			t.Fatalf("action %q: status = %d, want %d", action, response.Code, want)
+		}
+	}
+}
+
 func TestDirectGRSAIAddressesIgnoreProxyVirtualIPs(t *testing.T) {
 	response := grsaiDNSResponse{
 		Status: 0,

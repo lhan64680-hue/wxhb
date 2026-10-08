@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.5.38
+
++ [新增] GRS 国内直连生图接入 nano-banana-2.1、nano-banana-2、nano-banana-fast、nano-banana-2-lite、gpt-image-2.5；按平台实时积分价格降序排列，分别适配 Banana/GPT 绘图接口、参考图和分辨率参数，保留已有 Key 与默认模型。
+
 ## v0.5.37
 
 + [修复] GRS 积分栏改为查询当前 Key 所属账户的余额，不再把 Key 单独额度误当成账户积分并误报不足；旧的 Key 额度缓存不会用于账户余额显示。

@@ -3,6 +3,7 @@ import axios from "axios";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { publicHttpUrl } from "@/lib/media-url";
 import { formatApiErrorDetail } from "@/services/api/request";
+import { grsaiDrawEndpoint, grsaiImageParameters } from "@/services/api/grsai-image";
 import { imageToDataUrl, resolveImageUrl } from "@/services/image-storage";
 import { buildApiUrl, channelIdForActiveModel, KIMI_K3_CHANNEL_ID, localChannelForActiveModel, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -202,7 +203,8 @@ function createGrsaiDrawBody(config: AiConfig, prompt: string, urls: string[] = 
         model: config.model,
         prompt: withPromptGuard(config, withSystemPrompt(config, prompt)),
         urls,
-        aspectRatio: resolveRequestSize(normalizeQuality(config.quality), config.size) || "1024x1024",
+        ...(grsaiImageParameters(config) ?? { aspectRatio: resolveRequestSize(normalizeQuality(config.quality), config.size) || "1024x1024" }),
+        webHook: "-1",
     };
     return body;
 }
@@ -211,7 +213,7 @@ function grsaiRelayHeaders(config: AiConfig) {
     const channel = localChannelForActiveModel(config);
     return {
         "X-Local-GRSAI-Base-URL": channel?.baseUrl || config.baseUrl,
-        "X-Local-GRSAI-API-Key": channel?.apiKey || config.apiKey,
+        "X-Local-GRSAI-API-Key": channel ? channel.apiKey : config.apiKey,
         "Content-Type": "application/json",
     };
 }
@@ -348,18 +350,19 @@ async function requestGrsaiDrawImages(config: AiConfig, prompt: string, referenc
     const urls = await Promise.all(references.map((image) => imageToDataUrl(image)));
     if (references.length && urls.some((url) => !url)) throw new ImageRequestError("参考图读取失败，请重新上传后再试");
     const body = createGrsaiDrawBody(config, prompt, urls);
+    const endpoint = grsaiDrawEndpoint(config.model);
     const deadline = Date.now() + GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS * 1000;
 
     return requestAndParseImages(
         config,
-        "/draw/completions",
+        endpoint,
         body,
         GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS,
         () =>
             requestWithTransientRetry(
                 () =>
                     withTimeout(Math.min(20, GRSAI_IMAGE_REQUEST_TIMEOUT_SECONDS), (signal) =>
-                        fetch("/api/local-ai/grsai/draw/completions", {
+                        fetch(`/api/local-ai/grsai${endpoint}`, {
                             method: "POST",
                             headers: grsaiRelayHeaders(config),
                             body: JSON.stringify(body),
@@ -1165,7 +1168,7 @@ async function createCanvasImageTaskRequest(config: AiConfig & { seedIndex?: num
         return {
             method: "POST",
             headers: jsonHeaders,
-            body: JSON.stringify({ endpoint: "/draw/completions", ...meta, request: body }),
+            body: JSON.stringify({ endpoint: grsaiDrawEndpoint(config.model), ...meta, request: body }),
         };
     }
     if (config.apiMode === "responses") {

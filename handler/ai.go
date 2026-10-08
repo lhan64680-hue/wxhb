@@ -141,7 +141,7 @@ func LocalKimiChatCompletions(w http.ResponseWriter, r *http.Request) {
 	copyAIResponseBody(w, response.Body)
 }
 
-// LocalGRSAIDraw forwards only the two documented GRS draw endpoints from the
+// LocalGRSAIDraw forwards only the documented GRS draw endpoints from the
 // local application. Keeping the request on the same origin avoids browser CORS
 // failures while the outbound request remains a direct connection with proxies
 // explicitly disabled.
@@ -152,7 +152,7 @@ func LocalGRSAIDraw(w http.ResponseWriter, r *http.Request, action string) {
 	}
 
 	action = strings.ToLower(strings.TrimSpace(action))
-	if action != "completions" && action != "result" {
+	if action != "completions" && action != "nano-banana" && action != "result" {
 		FailWithStatus(w, http.StatusNotFound, "不支持的 GRS 图像接口")
 		return
 	}

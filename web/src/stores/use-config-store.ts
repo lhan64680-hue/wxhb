@@ -88,6 +88,7 @@ export const MINIMAX_H3_REFERENCE_TO_VIDEO_MODEL = "minimax-h3/reference-to-vide
 export const MINIMAX_H3_FL2VA_CHANNEL_ID = "local-minimax-h3-fl2va";
 export const MINIMAX_H3_REF2VA_CHANNEL_ID = "local-minimax-h3-ref2va";
 export const GRSAI_GPT_IMAGE_2_MODEL = "gpt-image-2";
+export const GRSAI_IMAGE_MODELS = ["nano-banana-2.1", "nano-banana-2", "gpt-image-2.5", GRSAI_GPT_IMAGE_2_MODEL, "nano-banana-fast", "nano-banana-2-lite"];
 export const GRSAI_GPT_IMAGE_2_CHANNEL_ID = "local-grsai-gpt-image-2";
 export const KIMI_K3_MODEL = "kimi-k3";
 export const KIMI_K3_CHANNEL_ID = "local-kimi-k3";
@@ -120,10 +121,10 @@ function minimaxH3ModelList() {
 function defaultGrsaiGptImage2Channel(): LocalModelChannel {
     return {
         id: GRSAI_GPT_IMAGE_2_CHANNEL_ID,
-        name: "GRS AI GPT Image 2（国内直连）",
+        name: "GRS AI 生图（国内直连）",
         baseUrl: "https://grsai.dakka.com.cn",
         apiKey: "",
-        models: [GRSAI_GPT_IMAGE_2_MODEL],
+        models: [...GRSAI_IMAGE_MODELS],
     };
 }
 
@@ -167,7 +168,7 @@ export const defaultConfig: AiConfig = {
     videoCharacterOrientation: "video",
     systemPrompt: "",
     models: defaultLocalChannels().flatMap((channel) => channel.models),
-    imageModels: [GRSAI_GPT_IMAGE_2_MODEL],
+    imageModels: [...GRSAI_IMAGE_MODELS],
     videoModels: minimaxH3ModelList(),
     textModels: [KIMI_K3_MODEL],
     audioModels: [],
@@ -542,7 +543,15 @@ export function normalizeLocalChannels(config: Partial<AiConfig>) {
 }
 
 function ensureGrsaiGptImage2Channel(channels: LocalModelChannel[]) {
-    const migrated = channels.map((channel) => (channel.id === LEGACY_OPENAI_GPT_IMAGE_2_CHANNEL_ID && !channel.apiKey.trim() ? defaultGrsaiGptImage2Channel() : channel));
+    const migrated = channels.map((channel) => {
+        if (channel.id === LEGACY_OPENAI_GPT_IMAGE_2_CHANNEL_ID && !channel.apiKey.trim()) return defaultGrsaiGptImage2Channel();
+        if (channel.id !== GRSAI_GPT_IMAGE_2_CHANNEL_ID) return channel;
+        return {
+            ...channel,
+            name: channel.name === "GRS AI GPT Image 2（国内直连）" ? "GRS AI 生图（国内直连）" : channel.name,
+            models: normalizeModelList([...GRSAI_IMAGE_MODELS, ...channel.models]),
+        };
+    });
     if (migrated.some((channel) => channel.id === GRSAI_GPT_IMAGE_2_CHANNEL_ID)) return migrated;
     return [...migrated, defaultGrsaiGptImage2Channel()];
 }

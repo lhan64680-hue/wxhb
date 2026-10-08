@@ -6,7 +6,7 @@ import { Cpu } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { filterModelsByCapability, normalizeLocalChannels, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
-import { formatCredits, grsaiBillingChannel } from "@/services/api/grsai-billing";
+import { compareImageCredits, formatCredits, grsaiBillingChannel } from "@/services/api/grsai-billing";
 import { billingEntryForConfig, useImageBillingStore } from "@/stores/use-image-billing-store";
 
 type ModelPickerProps = {
@@ -26,12 +26,16 @@ export function ModelPicker({ config, value, channelId, capability, onChange, cl
     const [open, setOpen] = useState(false);
     useImageBillingStore((state) => state.entries);
     const refreshBilling = useImageBillingStore((state) => state.refresh);
-    const optionPrice = (model: string, selectedChannelId?: string) => {
+    const optionCredits = (model: string, selectedChannelId?: string) => {
         if (capability !== "image") return undefined;
         const selectedConfig = { ...config, model, imageModel: model, activeChannelId: selectedChannelId || "", imageChannelId: selectedChannelId || "" };
         if (!grsaiBillingChannel(selectedConfig)) return undefined;
         const price = billingEntryForConfig(selectedConfig)?.data?.models.find((item) => item.name === model);
-        return price?.credits == null ? "价格未确认" : `${formatCredits(price.credits)} 积分/次`;
+        return price?.credits ?? null;
+    };
+    const optionPrice = (model: string, selectedChannelId?: string) => {
+        const credits = optionCredits(model, selectedChannelId);
+        return credits === undefined ? undefined : credits === null ? "价格未确认" : `${formatCredits(credits)} 积分/次`;
     };
     const channelOptions = useMemo(() => {
         const channels =
@@ -46,7 +50,7 @@ export function ModelPicker({ config, value, channelId, capability, onChange, cl
         if (!value) return undefined;
         return channelOptions.find((item) => item.model === value && item.channelId === channelId) || channelOptions.find((item) => item.model === value);
     }, [channelId, channelOptions, value]);
-    const options = channelOptions;
+    const options = capability === "image" ? [...channelOptions].sort((left, right) => compareImageCredits(optionCredits(left.model, left.channelId), optionCredits(right.model, right.channelId))) : channelOptions;
     const current = value || "";
     const currentValue = current && currentOption ? currentOption.key : "";
 
@@ -146,7 +150,7 @@ function ModelIcon({ model }: { model: string }) {
 function resolveModelIcon(model: string) {
     const name = model.toLowerCase();
     if (name.includes("claude") || name.includes("anthropic")) return "/icons/claude.svg";
-    if (name.includes("gemini") || name.includes("google")) return "/icons/gemini.svg";
+    if (name.includes("gemini") || name.includes("google") || name.includes("nano-banana")) return "/icons/gemini.svg";
     if (name.includes("gpt") || name.includes("openai")) return "/icons/openai.svg";
     if (name.includes("grok") || name.includes("grok")) return "/icons/grok.svg";
     if (name.includes("deepseek") || name.includes("deepseek")) return "/icons/deepseek.svg";
