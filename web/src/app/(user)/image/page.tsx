@@ -48,7 +48,7 @@ import { useAssetStore } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import { ImageBillingPanel } from "./image-billing-panel";
-import { formatCredits, type ImageGenerationBilling } from "@/services/api/grsai-billing";
+import { formatCredits, grsaiBillingChannel, type ImageGenerationBilling } from "@/services/api/grsai-billing";
 import { imageBillingSnapshot, useImageBillingStore } from "@/stores/use-image-billing-store";
 
 type GeneratedImage = {
@@ -1294,6 +1294,11 @@ const quickQualityOptions = [
     { value: "low", label: "低" },
 ];
 
+const imageApiModeOptions = [
+    { value: "images", label: "直接生图", tooltip: "使用图片专用接口，直接按提示词生成图片，或根据参考图编辑图片。GRS 渠道请选择此模式。" },
+    { value: "responses", label: "对话式生图", tooltip: "通过大模型调用生图工具，需要平台支持 Responses 接口。本工作台仍按单次任务提交，不会保留连续对话上下文；当前 GRS 接入不使用此模式。" },
+];
+
 function WorkbenchPanel({
     layout,
     currentLayout,
@@ -1391,19 +1396,17 @@ function WorkbenchPanel({
                                 />
                             </label>
                             <label className="grid gap-1 text-xs text-stone-500 dark:text-stone-400">
-                                接口模式
+                                生图方式
                                 <div className="flex h-11 items-center rounded-xl border border-stone-200 bg-background px-2.5 dark:border-stone-800">
                                     <Segmented
                                         size="small"
                                         className="canvas-config-mode !rounded-md !p-0.5 w-full"
                                         value={config.apiMode}
                                         onChange={(value) => updateConfig("apiMode", value as "images" | "responses")}
-                                        options={[
-                                            { value: "images", label: "images" },
-                                            { value: "responses", label: "responses" },
-                                        ]}
+                                        options={imageApiModeOptions}
                                     />
                                 </div>
+                                {grsaiBillingChannel(config) ? <span className="text-[11px] text-muted-foreground">GRS 请选择“直接生图”</span> : null}
                             </label>
                             <QuickSelect label="尺寸" value={config.size || "auto"} options={quickSizeOptions} onChange={(value) => updateConfig("size", value)} />
                             <QuickSelect label="质量" value={config.quality || "auto"} options={quickQualityOptions} onChange={(value) => updateConfig("quality", value)} />
@@ -1877,18 +1880,16 @@ function GenerationSettings({ config, model, updateConfig, openConfigDialog }: {
                         onMissingConfig={() => openConfigDialog(false)}
                     />
                     <div className="flex items-center justify-between gap-3 pt-1">
-                        <div className="text-xs opacity-75">接口模式</div>
+                        <div className="text-xs opacity-75">生图方式</div>
                         <Segmented
                             size="small"
                             className="canvas-config-mode !rounded-md !p-0.5"
                             value={config.apiMode}
                             onChange={(value) => updateConfig("apiMode", value as "images" | "responses")}
-                            options={[
-                                { value: "images", label: "images" },
-                                { value: "responses", label: "responses" },
-                            ]}
+                            options={imageApiModeOptions}
                         />
                     </div>
+                    {grsaiBillingChannel(config) ? <p className="text-[11px] text-muted-foreground">GRS 请选择“直接生图”；另一模式需要平台支持对话生图接口。</p> : null}
                 </div>
             </section>
             <ImageSettingsPanel config={config} onConfigChange={(key, value) => updateConfig(key, value)} theme={theme} showTitle={false} className="space-y-3" maxCount={10} />

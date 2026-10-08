@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.5.39
+
++ [调整] 生图工作台两种布局将接口模式改为中文“直接生图 / 对话式生图”，补充用途和兼容性说明，明确 GRS 渠道应选择直接生图；不更改已保存配置及实际请求逻辑。
+
 ## v0.5.38
 
 + [新增] GRS 国内直连生图接入 nano-banana-2.1、nano-banana-2、nano-banana-fast、nano-banana-2-lite、gpt-image-2.5；按平台实时积分价格降序排列，分别适配 Banana/GPT 绘图接口、参考图和分辨率参数，保留已有 Key 与默认模型。
