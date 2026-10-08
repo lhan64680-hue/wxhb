@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -18,6 +17,29 @@ func billingTestResponse(status int, body string) *http.Response {
 	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}
 }
 
+func TestGRSAIBillingUsesAccountBalanceNotKeyQuota(t *testing.T) {
+	transport := billingTestTransport(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case "/client/common/getCredits":
+			return billingTestResponse(200, `{"code":0,"data":{"credits":5000}}`), nil
+		case "/client/openapi/getAPIKeyCredits":
+			return billingTestResponse(200, `{"code":0,"data":{"credits":0}}`), nil
+		default:
+			return billingTestResponse(200, billingTestModels), nil
+		}
+	})
+	result := FetchGRSAIBilling(context.Background(), "https://grsai.dakka.com.cn", "test-key", transport)
+	if result.Balance == nil || *result.Balance != 5000 {
+		if result.Balance == nil {
+			t.Fatal("账户余额未返回")
+		}
+		t.Fatalf("账户积分应为 5000，不能显示 Key 额度 0；实际 balance=%v", *result.Balance)
+	}
+	if result.BalanceSource != "account" {
+		t.Fatal("must explicitly identify the balance as account balance")
+	}
+}
+
 const billingTestModels = `{"code":0,"data":{"list":[
 {"name":"gpt-image-2","type":"image","cost":600,"costType":0,"desc":"标准","errorReturn":true,"violationReturn":true},
 {"name":"paused","type":"image","cost":2000,"costType":0,"closeModel":true,"maintenance":"维护中"},
@@ -31,17 +53,13 @@ func TestGRSAIBillingReadsBalanceAndImagePrices(t *testing.T) {
 	var calls atomic.Int32
 	transport := billingTestTransport(func(r *http.Request) (*http.Response, error) {
 		calls.Add(1)
-		if r.Method != http.MethodPost || r.URL.RawQuery != "" || r.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("unexpected request method, query or content type")
-		}
-		if strings.HasSuffix(r.URL.Path, "getAPIKeyCredits") {
-			var body map[string]string
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["apiKey"] != "test-key" || len(body) != 1 {
-				t.Errorf("API key must be sent only in POST body")
+		if r.URL.Path == "/client/common/getCredits" {
+			if r.Method != http.MethodGet || r.URL.Query().Get("apikey") != "test-key" || len(r.URL.Query()) != 1 {
+				t.Errorf("must use documented account balance endpoint and parameter")
 			}
 			return billingTestResponse(200, `{"code":0,"data":{"credits":12345.5}}`), nil
 		}
-		if r.URL.Path != "/client/serverGrsai/getModelListV2" {
+		if r.URL.Path != "/client/serverGrsai/getModelListV2" || r.Method != http.MethodPost || r.URL.RawQuery != "" || r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("unexpected model endpoint %q", r.URL.Path)
 		}
 		return billingTestResponse(200, billingTestModels), nil
@@ -76,7 +94,7 @@ func TestGRSAIBillingNeverTreatsMissingOrFailedBalanceAsZero(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			transport := billingTestTransport(func(r *http.Request) (*http.Response, error) {
-				if strings.HasSuffix(r.URL.Path, "getAPIKeyCredits") {
+				if r.URL.Path == "/client/common/getCredits" {
 					return billingTestResponse(test.status, test.body), nil
 				}
 				return billingTestResponse(200, billingTestModels), nil

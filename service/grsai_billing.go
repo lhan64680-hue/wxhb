@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -23,20 +24,22 @@ type GRSAIImagePrice struct {
 }
 
 type GRSAIBilling struct {
-	Balance      *float64          `json:"balance"`
-	BalanceError string            `json:"balanceError,omitempty"`
-	Models       []GRSAIImagePrice `json:"models"`
-	ModelsError  string            `json:"modelsError,omitempty"`
-	UpdatedAt    int64             `json:"updatedAt"`
+	Balance       *float64          `json:"balance"`
+	BalanceSource string            `json:"balanceSource"`
+	BalanceError  string            `json:"balanceError,omitempty"`
+	Models        []GRSAIImagePrice `json:"models"`
+	ModelsError   string            `json:"modelsError,omitempty"`
+	UpdatedAt     int64             `json:"updatedAt"`
 }
 
-// The account-token API is intentionally not used: only query the supplied
-// generation API key, with the key in the POST body rather than the URL.
+// Resolve the account balance using the generation key. Key-specific quota is
+// not the account balance. Only the server uses the provider's documented query
+// parameter; never return or log the upstream URL (it contains a credential).
 func FetchGRSAIBilling(ctx context.Context, baseURL, apiKey string, transport http.RoundTripper) GRSAIBilling {
 	client := &http.Client{Timeout: 18 * time.Second, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	result := GRSAIBilling{Models: []GRSAIImagePrice{}}
+	result := GRSAIBilling{BalanceSource: "account", Models: []GRSAIImagePrice{}}
 	var workers sync.WaitGroup
 	workers.Add(2)
 	go func() {
@@ -48,7 +51,8 @@ func FetchGRSAIBilling(ctx context.Context, baseURL, apiKey string, transport ht
 		var data struct {
 			Credits *float64 `json:"credits"`
 		}
-		if err := grsaiBillingRequest(ctx, client, baseURL+"/client/openapi/getAPIKeyCredits", map[string]string{"apiKey": apiKey}, &data); err != nil {
+		endpoint := baseURL + "/client/common/getCredits?" + url.Values{"apikey": {apiKey}}.Encode()
+		if err := grsaiBillingRequest(ctx, client, http.MethodGet, endpoint, nil, &data); err != nil {
 			result.BalanceError = strings.ReplaceAll(err.Error(), apiKey, "[已隐藏]")
 		} else if data.Credits == nil || *data.Credits < 0 {
 			result.BalanceError = "平台未返回有效的可用积分"
@@ -71,7 +75,7 @@ func FetchGRSAIBilling(ctx context.Context, baseURL, apiKey string, transport ht
 				ViolationReturn bool     `json:"violationReturn"`
 			} `json:"list"`
 		}
-		if err := grsaiBillingRequest(ctx, client, baseURL+"/client/serverGrsai/getModelListV2", struct{}{}, &data); err != nil {
+		if err := grsaiBillingRequest(ctx, client, http.MethodPost, baseURL+"/client/serverGrsai/getModelListV2", struct{}{}, &data); err != nil {
 			result.ModelsError = err.Error()
 			return
 		}
@@ -98,12 +102,16 @@ func FetchGRSAIBilling(ctx context.Context, baseURL, apiKey string, transport ht
 	return result
 }
 
-func grsaiBillingRequest(ctx context.Context, client *http.Client, endpoint string, body any, data any) error {
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("积分查询参数无效")
+func grsaiBillingRequest(ctx context.Context, client *http.Client, method, endpoint string, body any, data any) error {
+	var requestBody io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("积分查询参数无效")
+		}
+		requestBody = bytes.NewReader(encoded)
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
+	request, err := http.NewRequestWithContext(ctx, method, endpoint, requestBody)
 	if err != nil {
 		return fmt.Errorf("积分查询请求创建失败")
 	}

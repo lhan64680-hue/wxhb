@@ -12,6 +12,7 @@ export type ImageModelPrice = {
 
 export type GRSAIBilling = {
     balance: number | null;
+    balanceSource: "account";
     balanceError?: string;
     models: ImageModelPrice[];
     modelsError?: string;
