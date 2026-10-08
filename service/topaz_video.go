@@ -765,6 +765,8 @@ func buildTopazCommand(installation topazInstallation, inputPath, outputPath str
 		slowmo := map[string]float64{"1x": 1, "2x": 2, "4x": 4}[input.Slowdown]
 		filters = append(filters, fmt.Sprintf("tvai_fi=model=chr-2:device=-2:vram=1:instances=0:download=0:slowmo=%g:fps=%g", slowmo, fps))
 	}
+	// Some models only output fixed 1x/2x/4x sizes even with w/h set.
+	filters = append(filters, fmt.Sprintf("scale=%d:%d:flags=lanczos", width, height), "setsar=1")
 	qp := map[string]string{"high": "18", "balanced": "23", "compact": "28"}[input.Quality]
 	encoder := "h264_nvenc"
 	if width > 4096 || height > 4096 {
@@ -856,7 +858,9 @@ func humanizeTopazError(lines []string) string {
 	if regexp.MustCompile(`(?i)model.*not found|download.*failed`).MatchString(text) {
 		return "Topaz 所需模型权重未就绪；请先在 Topaz Video 客户端下载该模型后重试"
 	}
-	if regexp.MustCompile(`(?i)license|activation|auth`).MatchString(text) {
+	// Topaz also prints license diagnostics on success; only explicit failures
+	// indicate an authorization problem, not "License checkout successful".
+	if regexp.MustCompile(`(?i)\b(?:license|activation|auth(?:entication|orization)?)\b[^\r\n]*(?:\b(?:failed|failure|invalid|expired|denied|missing|unavailable|required|error)\b|not found|not activated)|\b(?:invalid|expired|missing|no valid)\s+license\b|\b(?:unauthorized|unauthorised|not authorized|not authenticated)\b|license checkout status:\s*-?[1-9]\d*\b`).MatchString(text) {
 		return "Topaz Video 授权不可用，请先在 Topaz Video 客户端完成登录与授权"
 	}
 	if len(strings.TrimSpace(text)) == 0 {

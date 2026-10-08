@@ -85,3 +85,55 @@ func containsTopazArgumentPair(arguments []string, option, value string) bool {
 	}
 	return false
 }
+
+func TestHumanizeTopazErrorDoesNotMisreadSuccessfulLicenseCheckout(t *testing.T) {
+	lines := []string{
+		"[AIE-RLM] License checkout status: 0",
+		"[AIE-RLM] License expiration details: permanent 0",
+		"[AIE-RLM] License checkout successful Owned - Cached License: 0",
+		"License expires in 0 days.",
+		"[Parsed_tvai_up_0] Failed to configure output pad on Parsed_tvai_up_0",
+		"Error reinitializing filters!",
+	}
+	got := humanizeTopazError(lines)
+	if strings.Contains(got, "授权不可用") || !strings.Contains(got, "Failed to configure output pad") {
+		t.Fatalf("successful checkout must preserve the real filter failure, got %q", got)
+	}
+}
+
+func TestBuildTopazCommandEnforcesRequestedOutputDimensions(t *testing.T) {
+	for _, interpolation := range []string{"none", "2x"} {
+		command := buildTopazCommand(
+			topazInstallation{ffmpeg: "ffmpeg"}, "source.mp4", "output.mp4",
+			TopazVideoTaskInput{Model: "alq-13", Quality: "high", Interpolation: interpolation, Slowdown: "1x"},
+			topazProbe{Width: 864, Height: 480, FPS: 24}, 3888, 2160,
+		)
+		var filters string
+		for i, arg := range command {
+			if arg == "-vf" {
+				filters = command[i+1]
+				break
+			}
+		}
+		if !strings.HasSuffix(filters, "scale=3888:2160:flags=lanczos,setsar=1") {
+			t.Fatalf("%s: Topaz's discrete AI scale must be resized to the requested dimensions: %s", interpolation, filters)
+		}
+	}
+}
+
+func TestHumanizeTopazErrorRecognizesExplicitLicenseFailures(t *testing.T) {
+	for _, line := range []string{
+		"License checkout failed",
+		"License checkout status: -1",
+		"Invalid license",
+		"License expired",
+		"Authentication required",
+		"Unauthorized",
+	} {
+		t.Run(line, func(t *testing.T) {
+			if got := humanizeTopazError([]string{line}); !strings.Contains(got, "授权不可用") {
+				t.Fatalf("explicit authorization failure must be identified, got %q", got)
+			}
+		})
+	}
+}
