@@ -49,7 +49,7 @@ export async function createTopazVideoTask(source: { url: string; storageKey?: s
     const blob = await getTopazSourceBlob(source.url, source.storageKey);
     const filename = source.name || "canvas-video.mp4";
     const uploaded = await uploadTopazVideo(blob, filename);
-    const metadata = await readTopazVideoMetadata(blob, { width: source.width, height: source.height, durationMs: source.durationMs });
+    const metadata = await readTopazVideoMetadata(blob);
     return apiPost<TopazVideoTask>("/api/local-topaz-video/tasks", { inputId: uploaded.id, sourceWidth: metadata.width, sourceHeight: metadata.height, sourceDurationMs: metadata.durationMs, ...options });
 }
 
@@ -89,12 +89,21 @@ async function fetchTopazSource(source: string) {
     return fetch(source);
 }
 
-function readTopazVideoMetadata(blob: Blob, fallback: { width?: number; height?: number; durationMs?: number }) {
-    if (fallback.width && fallback.height) return Promise.resolve({ width: fallback.width, height: fallback.height, durationMs: fallback.durationMs || 0 });
+function readTopazVideoMetadata(blob: Blob) {
+    // 节点 durationMs 是生成耗时，不是片长；每一轮都读取实际成片的媒体信息。
     return new Promise<{ width: number; height: number; durationMs: number }>((resolve, reject) => {
         const video = document.createElement("video");
         const url = URL.createObjectURL(blob);
-        const done = () => URL.revokeObjectURL(url);
+        const timeout = window.setTimeout(() => {
+            done();
+            reject(new Error("读取输入视频信息超时，请重新加载视频后重试"));
+        }, 15000);
+        const done = () => {
+            window.clearTimeout(timeout);
+            video.onloadedmetadata = null;
+            video.onerror = null;
+            URL.revokeObjectURL(url);
+        };
         video.preload = "metadata";
         video.onloadedmetadata = () => {
             done();
@@ -104,7 +113,7 @@ function readTopazVideoMetadata(blob: Blob, fallback: { width?: number; height?:
                 reject(new Error("无法读取输入视频分辨率"));
                 return;
             }
-            resolve({ width, height, durationMs: Math.max(0, Math.round((video.duration || 0) * 1000)) });
+            resolve({ width, height, durationMs: Number.isFinite(video.duration) ? Math.max(0, Math.round(video.duration * 1000)) : 0 });
         };
         video.onerror = () => {
             done();

@@ -31,7 +31,7 @@ export function CanvasTopazVideoPanel({ node, capabilities, isRunning, hasVideoI
     const slowdown = node.metadata?.topazSlowdown || "1x";
     const ready = Boolean(capabilities?.ready);
     const controlStyle = { background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text };
-    const hint = !hasVideoInput ? "请先连接一个视频输出节点" : capabilities && !ready ? capabilities.error || "本机 Topaz Video 尚未就绪" : "本机 Topaz Video · 本地直连";
+    const hint = !hasVideoInput ? "请连接已生成的视频或高清节点" : capabilities && !ready ? capabilities.error || "本机 Topaz Video 尚未就绪" : "本机 Topaz Video · 本地直连";
 
     return (
         <section
@@ -108,7 +108,7 @@ export function CanvasTopazVideoPanel({ node, capabilities, isRunning, hasVideoI
             </footer>
             <div className="mt-3 flex items-center gap-1.5 text-[11px]" style={{ color: theme.node.muted }}>
                 <Sparkles className="size-3.5" />
-                串行处理，避免与本机视频生成抢占显存。
+                成片可从右侧连接下一个高清节点，多次修复；各轮需分别启动。
             </div>
         </section>
     );

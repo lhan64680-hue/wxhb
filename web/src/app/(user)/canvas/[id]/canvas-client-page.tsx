@@ -58,6 +58,7 @@ import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { CANVAS_ASSET_DRAG_TYPE, CanvasSidePanel } from "../components/canvas-side-panel";
 import { DEFAULT_CANVAS_AGENT_PANEL, DEFAULT_CANVAS_SIDE_PANEL, useCanvasStore } from "../stores/use-canvas-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
+import { normalizeConnection } from "../utils/canvas-node-connections";
 import { shouldStopLocalImageTaskWithoutResult } from "../utils/canvas-local-image-task";
 import { buildCanvasAgentContext } from "../agent/canvas-agent-context";
 import type { CanvasAgentAction, CanvasAgentToolResult } from "../agent/canvas-agent-tools";
@@ -2038,7 +2039,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
 
     const uploadNodeVideoToCloud = useCallback(
         async (node: CanvasNodeData) => {
-            if (node.type !== CanvasNodeType.Video || !node.metadata?.content || node.metadata.storageKey?.startsWith("server:") || uploadingVideoNodeIdsRef.current.has(node.id)) return;
+            if (!isCanvasVideoNode(node.type) || !node.metadata?.content || node.metadata.storageKey?.startsWith("server:") || uploadingVideoNodeIdsRef.current.has(node.id)) return;
             uploadingVideoNodeIdsRef.current.add(node.id);
             const hideLoading = message.loading("正在上传视频至云存储...", 0);
             try {
@@ -2129,7 +2130,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 message.success("已加入我的素材");
                 return;
             }
-            if (node.type === CanvasNodeType.Video) {
+            if (isCanvasVideoNode(node.type)) {
                 if (!node.metadata?.content) return message.error("没有可保存的视频");
                 addAsset({
                     kind: "video",
@@ -2137,7 +2138,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     coverUrl: "",
                     tags: [],
                     source: "Canvas",
-                    data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.width, height: node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" },
+                    data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.metadata.naturalWidth || node.width, height: node.metadata.naturalHeight || node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" },
                     metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt },
                 });
                 message.success("已加入我的素材");
@@ -5061,26 +5062,6 @@ function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHand
         x: current.handleType === "source" ? node.position.x : node.position.x + node.width,
         y: node.position.y + node.height / 2,
     };
-}
-
-function normalizeConnection(firstNodeId: string, secondNodeId: string, nodes: CanvasNodeData[], firstHandleType: "source" | "target") {
-    const first = nodes.find((node) => node.id === firstNodeId);
-    const second = nodes.find((node) => node.id === secondNodeId);
-    if (!first || !second || first.id === second.id) return null;
-    if (first.type === CanvasNodeType.Group || second.type === CanvasNodeType.Group) return null;
-    if (second.type === CanvasNodeType.Director) {
-        if (!isCanvasImageNodeType(first.type)) return null;
-        return firstHandleType === "target" ? { fromNodeId: second.id, toNodeId: first.id } : { fromNodeId: first.id, toNodeId: second.id };
-    }
-    if (first.type === CanvasNodeType.Director) {
-        if (!isCanvasImageNodeType(second.type)) return null;
-        return firstHandleType === "target" ? { fromNodeId: second.id, toNodeId: first.id } : { fromNodeId: first.id, toNodeId: second.id };
-    }
-    if (first.type === CanvasNodeType.Config && second.type === CanvasNodeType.Config) return null;
-    if (second.type === CanvasNodeType.Config) return { fromNodeId: first.id, toNodeId: second.id };
-    if (first.type === CanvasNodeType.Config && firstHandleType === "target") return { fromNodeId: second.id, toNodeId: first.id };
-    if (first.type === CanvasNodeType.Config) return { fromNodeId: first.id, toNodeId: second.id };
-    return { fromNodeId: first.id, toNodeId: second.id };
 }
 
 function getInputSummary(inputs: NodeGenerationInput[]) {

@@ -125,7 +125,7 @@ export function CanvasNodeHoverToolbar({
     const left = viewport.x + (node.position.x + node.width / 2) * viewport.k;
     const top = viewport.y + node.position.y * viewport.k - 14;
     const isImage = isCanvasImageNodeType(node.type);
-    const isVideo = node.type === CanvasNodeType.Video;
+    const isVideo = node.type === CanvasNodeType.Video || node.type === CanvasNodeType.TopazVideo;
     const isAudio = node.type === CanvasNodeType.Audio;
     const hasImage = isImage && Boolean(node.metadata?.content);
     const hasVideo = isVideo && Boolean(node.metadata?.content);
@@ -171,7 +171,7 @@ export function CanvasNodeHoverToolbar({
         ...(isText ? [{ id: "decreaseFont", title: "减小字号", label: "缩小", icon: <Minus className="size-4" />, onClick: () => onDecreaseFont(node) }] : []),
         ...(isText ? [{ id: "increaseFont", title: "增大字号", label: "放大", icon: <Plus className="size-4" />, onClick: () => onIncreaseFont(node) }] : []),
         ...(isImage && !isPanorama && !hasImage ? [{ id: "uploadImage", title: "上传图片", label: "上传图片", icon: <Upload className="size-4" />, onClick: () => onUpload(node) }] : []),
-        ...(isVideo ? [{ id: "uploadVideo", title: hasVideo ? "替换视频" : "上传视频", label: hasVideo ? "替换视频" : "上传视频", icon: <Video className="size-4" />, onClick: () => onUpload(node) }] : []),
+        ...(node.type === CanvasNodeType.Video ? [{ id: "uploadVideo", title: hasVideo ? "替换视频" : "上传视频", label: hasVideo ? "替换视频" : "上传视频", icon: <Video className="size-4" />, onClick: () => onUpload(node) }] : []),
         ...(isAudio ? [{ id: "uploadAudio", title: hasAudio ? "替换音频" : "上传音频", label: hasAudio ? "替换音频" : "上传音频", icon: <Music2 className="size-4" />, onClick: () => onUpload(node) }] : []),
         ...(hasImage ? imageTools.map((tool) => ({ id: tool.id, title: tool.title, label: tool.label, icon: tool.icon, active: tool.active, onClick: tool.onClick })) : []),
     ];
@@ -246,7 +246,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
     const imageBytes = isCanvasImageNodeType(node?.type) && node?.metadata?.content ? getDataUrlByteSize(node.metadata.content) : 0;
     const batchCount = isCanvasImageNodeType(node?.type) ? node?.metadata?.batchChildIds?.length || 0 : 0;
     const videoGenerationDuration =
-        node?.type === CanvasNodeType.Video && typeof node.metadata?.durationMs === "number" && node.metadata.durationMs > 0 && (Boolean(node.metadata.videoTaskId) || Boolean(node.metadata.videoTaskVideoId) || Boolean(node.metadata.model))
+        (node?.type === CanvasNodeType.Video || node?.type === CanvasNodeType.TopazVideo) && typeof node.metadata?.durationMs === "number" && node.metadata.durationMs > 0 && (Boolean(node.metadata.videoTaskId) || Boolean(node.metadata.videoTaskVideoId) || Boolean(node.metadata.topazTaskId) || Boolean(node.metadata.model))
             ? formatDuration(node.metadata.durationMs)
             : "";
     const json = useMemo(() => {
@@ -300,8 +300,8 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                                           ? "图片"
                                           : node.type === CanvasNodeType.Panorama
                                             ? "全景图"
-                                            : node.type === CanvasNodeType.Video
-                                              ? "视频"
+                                            : node.type === CanvasNodeType.Video || node.type === CanvasNodeType.TopazVideo
+                                              ? node.type === CanvasNodeType.TopazVideo ? "视频高清" : "视频"
                                               : node.type === CanvasNodeType.Audio
                                                 ? "音频"
                                                 : node.type === CanvasNodeType.Director
