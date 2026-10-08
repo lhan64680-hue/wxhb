@@ -47,6 +47,9 @@ import { deleteStoredImages, imageToDataUrl, resolveImageUrl, uploadImage, uploa
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
+import { ImageBillingPanel } from "./image-billing-panel";
+import { formatCredits, type ImageGenerationBilling } from "@/services/api/grsai-billing";
+import { imageBillingSnapshot, useImageBillingStore } from "@/stores/use-image-billing-store";
 
 type GeneratedImage = {
     id: string;
@@ -72,6 +75,7 @@ type GenerationResult = {
     error?: string;
     errorDetail?: string;
     durationMs?: number;
+    billing?: ImageGenerationBilling;
     workflowId?: string;
     workflowName?: string;
     workflowInputs?: Record<string, unknown>;
@@ -92,6 +96,7 @@ type GenerationLog = {
     references: ReferenceImage[];
     durationMs: number;
     successCount: number;
+    billing?: ImageGenerationBilling;
     failCount: number;
     imageCount: number;
     size: string;
@@ -111,7 +116,7 @@ type GenerationLog = {
 };
 
 type GenerationLogConfig = Pick<AiConfig, "channelMode" | "model" | "imageModel" | "activeChannelId" | "imageChannelId" | "quality" | "size" | "count" | "apiMode" | "streamImages" | "streamPartialImages" | "responseFormatB64Json" | "codexCli">;
-type RequestSnapshot = { text: string; requestConfig: AiConfig; displayConfig: GenerationLogConfig; references: ReferenceImage[] };
+type RequestSnapshot = { text: string; requestConfig: AiConfig; displayConfig: GenerationLogConfig; references: ReferenceImage[]; billing?: ImageGenerationBilling };
 type GenerationCategory = { id: string; name: string; createdAt: number };
 type ResultViewMode = "all" | "category";
 
@@ -420,6 +425,7 @@ export default function ImagePage() {
                 model: snapshot.displayConfig.imageModel || snapshot.displayConfig.model,
                 config: { ...snapshot.displayConfig, count: "1" },
                 references: snapshot.references,
+                billing: snapshot.billing,
                 durationMs: 0,
                 successCount: 0,
                 failCount: 0,
@@ -460,8 +466,15 @@ export default function ImagePage() {
         }
     };
     const submitGenerationBatch = async (snapshot: RequestSnapshot) => {
+        // Freeze the per-call estimate at submission. Do not delay generation if
+        // the billing endpoint is unavailable, or infer costs from balance deltas.
+        snapshot = { ...snapshot, billing: imageBillingSnapshot(snapshot.requestConfig) };
         if (usesBackendImageTasks(snapshot.requestConfig)) {
-            await submitPersistentGenerationBatch(snapshot);
+            try {
+                await submitPersistentGenerationBatch(snapshot);
+            } finally {
+                void useImageBillingStore.getState().refresh(snapshot.requestConfig);
+            }
             return;
         }
         setPreviewLog(null);
@@ -502,6 +515,7 @@ export default function ImagePage() {
                         model: snapshot.displayConfig.imageModel || snapshot.displayConfig.model,
                         config: { ...snapshot.displayConfig, count: "1" },
                         references: snapshot.references,
+                        billing: snapshot.billing,
                         durationMs: performance.now() - taskStartedAt,
                         successCount: 1,
                         failCount: 0,
@@ -524,6 +538,7 @@ export default function ImagePage() {
                         model: snapshot.displayConfig.imageModel || snapshot.displayConfig.model,
                         config: { ...snapshot.displayConfig, count: "1" },
                         references: snapshot.references,
+                        billing: snapshot.billing,
                         durationMs: performance.now() - taskStartedAt,
                         successCount: 0,
                         failCount: 1,
@@ -542,6 +557,7 @@ export default function ImagePage() {
         });
 
         await Promise.allSettled(tasks);
+        void useImageBillingStore.getState().refresh(snapshot.requestConfig);
     };
 
     const downloadImage = async (image: GeneratedImage, index: number) => {
@@ -825,6 +841,7 @@ export default function ImagePage() {
                         setResults((value) => updateResultByLogId(value, log.id, { task, progress: task.progress, durationMs: nextLog.durationMs, lastPolledAt: nextLog.lastPolledAt }));
                     } else {
                         setResults((value) => value.filter((item) => !imageResultMatchesLog(item, nextLog)));
+                        if (nextLog.billing) void useImageBillingStore.getState().refresh({ ...imageTaskConfig(), ...nextLog.config });
                     }
                 }),
             );
@@ -1074,6 +1091,7 @@ export default function ImagePage() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+            <ImageBillingPanel />
             <main className={`${workbenchLayout === "side" ? "grid grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)]" : "relative flex flex-col"} min-h-0 flex-1 gap-3 overflow-y-auto p-3 lg:overflow-hidden`}>
                 {workbenchLayout === "side" ? (
                     <>
@@ -2010,6 +2028,7 @@ function TaskInfo({ result, error, onCopyPrompt }: { result: GenerationResult; e
                 ) : null}
                 <Tag className="m-0">{formatLogTime(result.createdAt)}</Tag>
                 <Tag className="m-0">{result.model}</Tag>
+                <ImageBillingTag billing={result.billing} status={result.status} />
                 <Tag className="m-0">{result.config.apiMode === "responses" ? "Responses" : "Images"}</Tag>
                 <Tag className="m-0">{result.config.size || "auto"}</Tag>
                 <Tag className="m-0">{result.config.quality || "auto"}</Tag>
@@ -2019,6 +2038,13 @@ function TaskInfo({ result, error, onCopyPrompt }: { result: GenerationResult; e
             {error ? <div className="rounded-md bg-red-100 px-2 py-1.5 text-red-600 dark:bg-red-950/40 dark:text-red-300">{error}</div> : null}
         </div>
     );
+}
+
+function ImageBillingTag({ billing, status }: { billing?: ImageGenerationBilling; status: GenerationResult["status"] }) {
+    if (!billing) return null;
+    const price = billing.estimatedCredits == null ? "单价未确认" : `参考单价 ${formatCredits(billing.estimatedCredits)} 积分`;
+    const label = status === "failed" ? "扣费/返还待确认" : billing.estimatedCredits == null ? "消耗未确认" : `${status === "pending" ? "预计消耗" : "消耗估算"} ${formatCredits(billing.estimatedCredits)} 积分`;
+    return <Tag className="m-0" title={`${billing.provider} · ${price}。按提交时的平台单价估算，最终扣费及返还以平台账单为准。`}>{label}</Tag>;
 }
 
 function HistoryLogCard({
@@ -2151,6 +2177,7 @@ function HistoryLogCard({
                     ) : null}
                     <Tag className="m-0 text-[10px]">{formatLogTime(log.createdAt)}</Tag>
                     <Tag className="m-0 text-[10px]">{log.model}</Tag>
+                    <ImageBillingTag billing={log.billing} status={log.status === "成功" ? "success" : log.status === "失败" ? "failed" : "pending"} />
                     <Tag className="m-0 text-[10px]">{log.config.apiMode === "responses" ? "Responses" : "Images"}</Tag>
                     <Tag className="m-0 text-[10px]">{log.config.size || "auto"}</Tag>
                     <Tag className="m-0 text-[10px]">{log.config.quality || "auto"}</Tag>
@@ -2223,6 +2250,7 @@ function createPendingResult(id: string, snapshot: RequestSnapshot): GenerationR
         model: snapshot.displayConfig.imageModel || snapshot.displayConfig.model,
         config: snapshot.displayConfig,
         references: snapshot.references,
+        billing: snapshot.billing,
     };
 }
 
@@ -2402,6 +2430,7 @@ function createResultFromImageLog(log: GenerationLog, status: GenerationResult["
         model: log.model,
         config: log.config,
         references: log.references,
+        billing: log.billing,
         workflowId: log.workflowId,
         workflowName: log.workflowName,
         workflowInputs: log.workflowInputs,
@@ -2641,6 +2670,7 @@ async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog>
         config,
         references,
         durationMs: log.durationMs || 0,
+        billing: log.billing,
         successCount: log.successCount ?? log.imageCount ?? 0,
         failCount: log.failCount || 0,
         imageCount: log.imageCount || log.successCount || 0,
@@ -2744,6 +2774,7 @@ function buildLog({
     config,
     references,
     durationMs,
+    billing,
     successCount,
     failCount,
     status,
@@ -2765,6 +2796,7 @@ function buildLog({
     config: GenerationLogConfig;
     references: ReferenceImage[];
     durationMs: number;
+    billing?: ImageGenerationBilling;
     successCount: number;
     failCount: number;
     status: GenerationLog["status"];
@@ -2792,6 +2824,7 @@ function buildLog({
         config: logConfig,
         references,
         durationMs,
+        billing,
         successCount,
         failCount,
         imageCount: status === "生成中" ? 0 : Number(logConfig.count) || successCount,

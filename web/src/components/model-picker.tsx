@@ -6,6 +6,8 @@ import { Cpu } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { filterModelsByCapability, normalizeLocalChannels, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { formatCredits, grsaiBillingChannel } from "@/services/api/grsai-billing";
+import { billingEntryForConfig, useImageBillingStore } from "@/stores/use-image-billing-store";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -22,6 +24,15 @@ type ModelPickerProps = {
 export function ModelPicker({ config, value, channelId, capability, onChange, className, fullWidth = false, placeholder = "选择模型", onMissingConfig }: ModelPickerProps) {
     const pickerId = useId();
     const [open, setOpen] = useState(false);
+    useImageBillingStore((state) => state.entries);
+    const refreshBilling = useImageBillingStore((state) => state.refresh);
+    const optionPrice = (model: string, selectedChannelId?: string) => {
+        if (capability !== "image") return undefined;
+        const selectedConfig = { ...config, model, imageModel: model, activeChannelId: selectedChannelId || "", imageChannelId: selectedChannelId || "" };
+        if (!grsaiBillingChannel(selectedConfig)) return undefined;
+        const price = billingEntryForConfig(selectedConfig)?.data?.models.find((item) => item.name === model);
+        return price?.credits == null ? "价格未确认" : `${formatCredits(price.credits)} 积分/次`;
+    };
     const channelOptions = useMemo(() => {
         const channels =
             config.channelMode === "remote"
@@ -60,7 +71,15 @@ export function ModelPicker({ config, value, channelId, capability, onChange, cl
                     onMissingConfig?.();
                     return;
                 }
-                if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
+                if (nextOpen) {
+                    window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
+                    if (capability === "image") {
+                        for (const option of options.filter((item, index, all) => all.findIndex((other) => other.channelId === item.channelId) === index)) {
+                            const selectedConfig = { ...config, model: option.model, imageModel: option.model, activeChannelId: option.channelId || "", imageChannelId: option.channelId || "" };
+                            if (!billingEntryForConfig(selectedConfig)?.data) void refreshBilling(selectedConfig);
+                        }
+                    }
+                }
                 setOpen(nextOpen);
             }}
             onValueChange={(nextValue) => {
@@ -81,6 +100,7 @@ export function ModelPicker({ config, value, channelId, capability, onChange, cl
             >
                 <ModelIcon model={current} />
                 <span className="canvas-model-picker-text min-w-0 flex-1 truncate text-left">{current || placeholder}</span>
+                {current && optionPrice(current, currentOption?.channelId) ? <span className="shrink-0 text-[11px] text-muted-foreground">{optionPrice(current, currentOption?.channelId)}</span> : null}
             </SelectTrigger>
             <SelectContent
                 data-canvas-no-zoom
@@ -95,7 +115,7 @@ export function ModelPicker({ config, value, channelId, capability, onChange, cl
                 {options.length ? (
                     options.map((option) => (
                         <SelectItem key={option.key} value={option.key} textValue={`${option.model} ${option.channelName}`}>
-                            <ModelLabel model={option.model} channelName={option.channelName} />
+                            <ModelLabel model={option.model} channelName={option.channelName} price={optionPrice(option.model, option.channelId)} />
                         </SelectItem>
                     ))
                 ) : (
@@ -108,12 +128,12 @@ export function ModelPicker({ config, value, channelId, capability, onChange, cl
     );
 }
 
-function ModelLabel({ model, channelName }: { model: string; channelName?: string }) {
+function ModelLabel({ model, channelName, price }: { model: string; channelName?: string; price?: string }) {
     return (
         <span className="flex min-w-0 items-center gap-2">
             <ModelIcon model={model} />
-            <span className="truncate">{model}</span>
-            {channelName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{channelName}</span> : null}
+            <span className="min-w-0 flex-1 truncate">{model}{channelName ? <span className="block truncate text-[11px] opacity-50">{channelName}</span> : null}</span>
+            {price ? <span className="shrink-0 text-[11px] text-muted-foreground">{price}</span> : null}
         </span>
     );
 }

@@ -24,6 +24,7 @@ func New() *gin.Engine {
 	api.GET("/settings", gin.WrapF(handler.Settings))
 	api.GET("/storage/config", gin.WrapF(handler.StorageConfig))
 	api.POST("/local-ai/kimi/chat/completions", gin.WrapF(handler.LocalKimiChatCompletions))
+	api.POST("/local-ai/grsai/billing", gin.WrapF(handler.LocalGRSAIBilling))
 	api.POST("/local-ai/grsai/draw/:action", func(c *gin.Context) {
 		handler.LocalGRSAIDraw(c.Writer, c.Request, c.Param("action"))
 	})
