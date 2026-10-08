@@ -1,6 +1,6 @@
 $runtimeRoot = Join-Path (Split-Path -Parent $PSCommandPath) ".runtime"
 
-foreach ($name in "backend", "frontend", "h3-adapter", "h3-engine") {
+foreach ($name in "h3-startup", "backend", "frontend", "h3-adapter", "h3-engine") {
     $pidFile = Join-Path $runtimeRoot "$name.pid"
     if (-not (Test-Path -LiteralPath $pidFile)) {
         continue

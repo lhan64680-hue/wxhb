@@ -1,4 +1,4 @@
-param([switch]$NoBrowser)
+param([switch]$NoBrowser, [switch]$H3Only, [switch]$Rebuild)
 
 $ErrorActionPreference = "Stop"
 
@@ -28,6 +28,16 @@ function Test-ListeningPort([int]$Port) {
         return $false
     } finally {
         $client.Dispose()
+    }
+}
+
+function Test-AppProcess([string]$Name) {
+    try {
+        $record = Get-Content -LiteralPath (Join-Path $runtimeRoot "$Name.pid") -Raw | ConvertFrom-Json
+        $process = Get-Process -Id $record.ProcessId -ErrorAction Stop
+        return [math]::Abs(($process.StartTime.ToUniversalTime() - ([datetime]$record.StartTimeUtc).ToUniversalTime()).TotalSeconds) -lt 2
+    } catch {
+        return $false
     }
 }
 
@@ -131,93 +141,105 @@ if (-not [string]::IsNullOrWhiteSpace($pathValue)) {
 $env:GOMODCACHE = Join-Path $runtimeRoot "go-mod-cache"
 $env:GOCACHE = Join-Path $runtimeRoot "go-build-cache"
 
-Sync-H3TurboNode
+if ($H3Only) {
+    Sync-H3TurboNode
 
-if (-not (Test-ListeningPort 8188)) {
-    if ((Test-Path -LiteralPath $h3EngineApp) -and (Test-PythonExecutable $h3SagePython)) {
-        $env:HTTP_PROXY = ""
-        $env:HTTPS_PROXY = ""
-        $env:ALL_PROXY = ""
-        $env:NO_PROXY = "*"
-        Start-AppProcess -Name "h3-engine" -FilePath $h3SagePython -ArgumentList @(
-            $h3EngineApp,
-            "--listen", "127.0.0.1",
-            "--port", "8188",
-            "--input-directory", $h3InputDirectory,
-            "--output-directory", $h3OutputDirectory,
-            "--lowvram",
-            "--disable-auto-launch",
-            "--use-sage-attention"
-        ) -WorkingDirectory (Split-Path -Parent $h3EngineApp)
-    } else {
-        Write-Warning "MiniMax-H3 SageAttention engine was not started because its verified local runtime was unavailable."
-    }
-}
-
-if (-not (Test-ListeningPort 7860)) {
-    $h3AdapterPython = $null
-    $useH3SitePackages = $false
-    if ((Test-Path -LiteralPath $h3AdapterApp) -and (Test-PythonExecutable $h3AdapterVenvPython)) {
-        $h3AdapterPython = $h3AdapterVenvPython
-    } elseif ((Test-Path -LiteralPath $h3AdapterApp) -and (Test-Path -LiteralPath $h3AdapterSitePackages) -and (Test-PythonExecutable $h3AdapterFallbackPython)) {
-        # The original Python 3.12 runtime was removed, but its H3 packages remain intact.
-        # Use the locally available compatible runtime without downloading anything.
-        $h3AdapterPython = $h3AdapterFallbackPython
-        $useH3SitePackages = $true
-    }
-
-    if ($null -ne $h3AdapterPython) {
-        $previousPythonPath = $env:PYTHONPATH
-        try {
-            if ($useH3SitePackages) {
-                $env:PYTHONPATH = $h3AdapterSitePackages
-            }
+    if (-not (Test-ListeningPort 8188) -and -not (Test-AppProcess "h3-engine")) {
+        if ((Test-Path -LiteralPath $h3EngineApp) -and (Test-PythonExecutable $h3SagePython)) {
             $env:HTTP_PROXY = ""
             $env:HTTPS_PROXY = ""
             $env:ALL_PROXY = ""
             $env:NO_PROXY = "*"
-            Start-AppProcess -Name "h3-adapter" -FilePath $h3AdapterPython -ArgumentList @($h3AdapterApp) -WorkingDirectory (Split-Path -Parent $h3AdapterApp)
-        } finally {
-            if ($null -eq $previousPythonPath) {
-                Remove-Item -LiteralPath Env:\PYTHONPATH -ErrorAction SilentlyContinue
-            } else {
-                $env:PYTHONPATH = $previousPythonPath
-            }
+            Start-AppProcess -Name "h3-engine" -FilePath $h3SagePython -ArgumentList @(
+                $h3EngineApp,
+                "--listen", "127.0.0.1",
+                "--port", "8188",
+                "--input-directory", $h3InputDirectory,
+                "--output-directory", $h3OutputDirectory,
+                "--lowvram",
+                "--disable-auto-launch",
+                "--use-sage-attention"
+            ) -WorkingDirectory (Split-Path -Parent $h3EngineApp)
+        } else {
+            Write-Warning "MiniMax-H3 SageAttention engine was not started because its verified local runtime was unavailable."
         }
-    } else {
-        Write-Warning "MiniMax-H3 adapter was not started because no compatible local Python runtime was found."
     }
+
+    if (-not (Test-ListeningPort 7860) -and -not (Test-AppProcess "h3-adapter")) {
+        $h3AdapterPython = $null
+        $useH3SitePackages = $false
+        if ((Test-Path -LiteralPath $h3AdapterApp) -and (Test-PythonExecutable $h3AdapterVenvPython)) {
+            $h3AdapterPython = $h3AdapterVenvPython
+        } elseif ((Test-Path -LiteralPath $h3AdapterApp) -and (Test-Path -LiteralPath $h3AdapterSitePackages) -and (Test-PythonExecutable $h3AdapterFallbackPython)) {
+            # The original Python 3.12 runtime was removed, but its H3 packages remain intact.
+            # Use the locally available compatible runtime without downloading anything.
+            $h3AdapterPython = $h3AdapterFallbackPython
+            $useH3SitePackages = $true
+        }
+
+        if ($null -ne $h3AdapterPython) {
+            $previousPythonPath = $env:PYTHONPATH
+            try {
+                if ($useH3SitePackages) {
+                    $env:PYTHONPATH = $h3AdapterSitePackages
+                }
+                $env:HTTP_PROXY = ""
+                $env:HTTPS_PROXY = ""
+                $env:ALL_PROXY = ""
+                $env:NO_PROXY = "*"
+                Start-AppProcess -Name "h3-adapter" -FilePath $h3AdapterPython -ArgumentList @($h3AdapterApp) -WorkingDirectory (Split-Path -Parent $h3AdapterApp)
+            } finally {
+                if ($null -eq $previousPythonPath) {
+                    Remove-Item -LiteralPath Env:\PYTHONPATH -ErrorAction SilentlyContinue
+                } else {
+                    $env:PYTHONPATH = $previousPythonPath
+                }
+            }
+        } else {
+            Write-Warning "MiniMax-H3 adapter was not started because no compatible local Python runtime was found."
+        }
+    }
+
+    return
 }
 
-if (-not (Test-ListeningPort 8080)) {
-    if (-not (Test-Path -LiteralPath $goExe)) {
-        throw "Local Go toolchain not found: $goExe"
-    }
-
-    Push-Location $appRoot
-    try {
-        & $goExe build -o $serverExe .
-        if ($LASTEXITCODE -ne 0) {
-            throw "Backend build failed. Check the source or run the launcher again."
+if (-not (Test-ListeningPort 8080) -and -not (Test-AppProcess "backend")) {
+    if ($Rebuild -or -not (Test-Path -LiteralPath $serverExe)) {
+        if (-not (Test-Path -LiteralPath $goExe)) {
+            throw "Local Go toolchain not found: $goExe"
         }
-    } finally {
-        Pop-Location
-    }
 
+        Push-Location $appRoot
+        try {
+            & $goExe build -o $serverExe .
+            if ($LASTEXITCODE -ne 0) {
+                throw "Backend build failed. Check the source or run the launcher again."
+            }
+        } finally {
+            Pop-Location
+        }
+    }
     Start-AppProcess -Name "backend" -FilePath $serverExe -ArgumentList @() -WorkingDirectory $appRoot
 }
 
-if (-not (Test-ListeningPort 3000)) {
+if (-not (Test-ListeningPort 3000) -and -not (Test-AppProcess "frontend")) {
     Start-AppProcess -Name "frontend" -FilePath $env:ComSpec -ArgumentList @("/d", "/c", "npm.cmd run dev") -WorkingDirectory $webRoot
+}
+
+if (-not (Test-ListeningPort 8188) -or -not (Test-ListeningPort 7860)) {
+    if (-not (Test-AppProcess "h3-startup")) {
+        Start-AppProcess -Name "h3-startup" -FilePath (Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe") -ArgumentList @(
+            "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ('"{0}"' -f $PSCommandPath), "-H3Only"
+        ) -WorkingDirectory $appRoot
+    }
 }
 
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
     $frontendReady = Test-HttpReady "http://127.0.0.1:3000" 2
 
     if ($frontendReady) {
-        # 首次访问画布会触发 Next.js 路由编译；启动完成前主动预热，
-        # 避免用户打开应用时误遇到冷编译超时。
-        if (Test-HttpReady "http://127.0.0.1:3000/canvas" 10) {
+        # Warm the canvas route before opening the browser.
+        if ((Test-HttpReady "http://127.0.0.1:3000/canvas" 10) -and (Test-HttpReady "http://127.0.0.1:8080/api/health" 2)) {
             if (-not $NoBrowser) {
                 Open-CanvasBrowser
             }
