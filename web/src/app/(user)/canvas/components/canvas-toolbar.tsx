@@ -1,7 +1,8 @@
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
 import { useRef, useState } from "react";
 import { Button, Segmented, Switch } from "antd";
-import { CircleDot, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Library, Moon, Music2, Palette, Redo2, Sparkles, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
+import { CircleDot, Eraser, FolderOpen, Group, Grid2x2, Hand, Image as ImageIcon, Info, Library, Moon, MousePointer2, Music2, Palette, Redo2, Sparkles, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
+import type { CanvasPointerTool } from "../types";
 
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -9,6 +10,10 @@ import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 
 export function CanvasToolbar({
     selectedCount,
+    pointerTool,
+    canGroup,
+    onPointerToolChange,
+    onGroup,
     canUndo,
     canRedo,
     backgroundMode,
@@ -23,13 +28,16 @@ export function CanvasToolbar({
     onUpload,
     onDelete,
     onClear,
-    onDeselect,
     onBackgroundModeChange,
     onShowImageInfoChange,
     onOpenAssetLibrary,
     onOpenMyAssets,
 }: {
     selectedCount: number;
+    pointerTool: CanvasPointerTool;
+    canGroup: boolean;
+    onPointerToolChange: (tool: CanvasPointerTool) => void;
+    onGroup: () => void;
     canUndo: boolean;
     canRedo: boolean;
     backgroundMode: CanvasBackgroundMode;
@@ -44,7 +52,6 @@ export function CanvasToolbar({
     onUpload: () => void;
     onDelete: () => void;
     onClear: () => void;
-    onDeselect: () => void;
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
     onOpenAssetLibrary: () => void;
@@ -67,7 +74,10 @@ export function CanvasToolbar({
         <div className="pointer-events-none absolute bottom-5 z-50 flex justify-center" style={{ left: 300, right: 16 }}>
             {tip ? <DockTip label={tip} x={tipX} theme={theme} /> : null}
             <div ref={wrapRef} className="thin-scrollbar pointer-events-auto flex h-14 max-w-full items-center gap-1 overflow-x-auto rounded-xl border px-2 shadow-lg backdrop-blur [&>*]:shrink-0" style={dockStyle}>
-                <ToolbarButton id="tool-hand" label="移动/选择" active={!selectedCount} hovered={hovered} activeStyle={activeStyle} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onDeselect}>
+                <ToolbarButton id="tool-select" label="鼠标选择" active={pointerTool === "select"} hovered={hovered} activeStyle={activeStyle} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={(event) => { onPointerToolChange("select"); event.currentTarget.blur(); }}>
+                    <MousePointer2 className="size-4.5" />
+                </ToolbarButton>
+                <ToolbarButton id="tool-hand" label="抓手平移" active={pointerTool === "hand"} hovered={hovered} activeStyle={activeStyle} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={(event) => { onPointerToolChange("hand"); event.currentTarget.blur(); }}>
                     <Hand className="size-4.5" />
                 </ToolbarButton>
                 <ToolbarButton id="tool-undo" label="撤销" disabled={!canUndo} hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onUndo}>
@@ -122,6 +132,9 @@ export function CanvasToolbar({
                 {selectedCount ? (
                     <>
                         <Divider theme={theme} />
+                        <ToolbarButton id="tool-group" label="打组" disabled={!canGroup} hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onGroup}>
+                            <Group className="size-4.5" />
+                        </ToolbarButton>
                         <ToolbarButton id="tool-delete" label="删除选中" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onDelete} danger>
                             <Trash2 className="size-4.5" />
                         </ToolbarButton>
@@ -231,6 +244,7 @@ function ToolbarButton({
         <Button
             type="text"
             aria-label={label}
+            aria-pressed={active}
             className="!h-8 !w-8 !min-w-8 !p-0"
             disabled={disabled}
             style={active ? activeStyle : hovered === id && !disabled ? hoverStyle : { color: danger ? "#f87171" : theme.toolbar.item, opacity: disabled ? 0.35 : 1 }}
@@ -278,7 +292,9 @@ function DockTip({ label, x, theme }: { label: string; x: number; theme: CanvasT
 }
 
 function toolLabel(id: string) {
-    if (id === "tool-hand") return "移动/选择";
+    if (id === "tool-select") return "鼠标选择（V）：拖动卡片，空白处框选";
+    if (id === "tool-hand") return "抓手平移（H）：拖动画布";
+    if (id === "tool-group") return "将选中节点打组（Ctrl / Cmd + G）";
     if (id === "tool-undo") return "撤销";
     if (id === "tool-redo") return "重做";
     if (id === "tool-text") return "文本";

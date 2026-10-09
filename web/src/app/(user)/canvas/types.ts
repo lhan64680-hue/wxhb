@@ -9,6 +9,8 @@ export type ViewportTransform = {
     k: number;
 };
 
+export type CanvasPointerTool = "select" | "hand";
+
 export enum CanvasNodeType {
     Image = "image",
     Panorama = "panorama",

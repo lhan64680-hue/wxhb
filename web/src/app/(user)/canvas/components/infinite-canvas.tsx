@@ -4,11 +4,12 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { ViewportTransform } from "../types";
+import type { CanvasPointerTool, ViewportTransform } from "../types";
 
 type InfiniteCanvasProps = {
     containerRef: React.RefObject<HTMLDivElement | null>;
     viewport: ViewportTransform;
+    tool: CanvasPointerTool;
     backgroundMode?: CanvasBackgroundMode;
     onViewportChange: (viewport: ViewportTransform) => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
@@ -19,7 +20,7 @@ type InfiniteCanvasProps = {
     children: React.ReactNode;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDeselect, onCanvasDoubleClick, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, tool, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDeselect, onCanvasDoubleClick, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,
@@ -48,19 +49,24 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.code !== "Space") return;
-            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+            const target = event.target instanceof Element ? event.target : null;
+            if (target?.closest("input,textarea,select,button,[contenteditable='true'],[data-canvas-no-zoom]")) return;
+            event.preventDefault();
             setIsSpacePressed(true);
         };
 
         const handleKeyUp = (event: KeyboardEvent) => {
             if (event.code === "Space") setIsSpacePressed(false);
         };
+        const resetSpace = () => setIsSpacePressed(false);
 
         window.addEventListener("keydown", handleKeyDown);
         window.addEventListener("keyup", handleKeyUp);
+        window.addEventListener("blur", resetSpace);
         return () => {
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
+            window.removeEventListener("blur", resetSpace);
         };
     }, []);
 
@@ -88,19 +94,20 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
 
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-canvas-no-zoom]")) return;
+        if (target?.closest("input,textarea,select,[contenteditable='true'],[data-canvas-no-zoom]")) return;
         if (target?.closest("[data-connection-create-menu]")) return;
         const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
 
-        if (event.button === 0 && (event.ctrlKey || event.metaKey) && isBackgroundClick) {
+        if (event.button === 0 && !isSpacePressed && (tool === "select" || event.ctrlKey || event.metaKey) && isBackgroundClick) {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
             onCanvasMouseDown?.(event);
             return;
         }
 
-        if (event.button === 1 || (event.button === 0 && !isSpacePressed && isBackgroundClick)) {
+        if (event.button === 1 || (event.button === 0 && (tool === "hand" || isSpacePressed))) {
             event.preventDefault();
+            event.stopPropagation();
             event.currentTarget.setPointerCapture(event.pointerId);
             panState.current = {
                 isPanning: true,
@@ -112,10 +119,6 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             };
             document.body.style.cursor = "grabbing";
             return;
-        }
-
-        if (event.button === 0 && isSpacePressed && isBackgroundClick) {
-            event.preventDefault();
         }
     };
 
@@ -158,14 +161,19 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
                 onCanvasDeselect?.();
             }
             panState.current.isPanning = false;
-            document.body.style.cursor = "default";
+            document.body.style.cursor = "";
         };
 
         window.addEventListener("pointermove", handlePointerMove);
         window.addEventListener("pointerup", handlePointerUp);
+        window.addEventListener("pointercancel", handlePointerUp);
+        window.addEventListener("blur", handlePointerUp);
         return () => {
             window.removeEventListener("pointermove", handlePointerMove);
             window.removeEventListener("pointerup", handlePointerUp);
+            window.removeEventListener("pointercancel", handlePointerUp);
+            window.removeEventListener("blur", handlePointerUp);
+            document.body.style.cursor = "";
         };
     }, [onCanvasDeselect, onViewportChange]);
 
@@ -185,9 +193,10 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     return (
         <div
             ref={containerRef}
-            className="relative h-full w-full cursor-grab select-none overflow-hidden"
+            data-canvas-tool={tool}
+            className={`relative h-full w-full select-none overflow-hidden ${tool === "hand" || isSpacePressed ? "cursor-grab" : "cursor-default"}`}
             style={{ background: theme.canvas.background }}
-            onPointerDown={handlePointerDown}
+            onPointerDownCapture={handlePointerDown}
             onDoubleClick={handleDoubleClick}
             onWheel={handleWheel}
             onContextMenu={onContextMenu}

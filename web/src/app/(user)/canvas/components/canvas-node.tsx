@@ -302,8 +302,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onHoverEnd(data.id);
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
+            onDragStart={(event) => event.preventDefault()}
         >
-            <div className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            <div className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]" onMouseDown={(event) => isEditingTitle ? event.stopPropagation() : onMouseDown(event, data.id)} onPointerDown={(event) => event.stopPropagation()}>
                 {isEditingTitle ? (
                     <input
                         ref={titleInputRef}
@@ -324,7 +325,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 ) : (
                     <button
                         type="button"
-                        className="block max-w-full truncate border-b border-dashed border-transparent px-0 py-0.5 text-left text-xs font-medium opacity-75 transition hover:border-current hover:opacity-100"
+                        className="block max-w-full cursor-move truncate border-b border-dashed border-transparent px-0 py-0.5 text-left text-xs font-medium opacity-75 transition hover:border-current hover:opacity-100"
                         style={{ color: theme.node.text }}
                         title="双击修改节点名称"
                         onDoubleClick={(event) => {
@@ -434,7 +435,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             ) : null}
 
             {showPanel && !isGroup && renderPanel ? (
-                <div className={"absolute left-1/2 top-full z-[70] max-w-[calc(100vw-24px)] -translate-x-1/2 pt-4 " + (data.type === CanvasNodeType.Image || isCanvasVideoNode(data.type) ? "w-[580px]" : "w-[500px]")}>{renderPanel(data)}</div>
+                <div data-canvas-no-zoom className={"absolute left-1/2 top-full z-[70] max-w-[calc(100vw-24px)] -translate-x-1/2 pt-4 " + (data.type === CanvasNodeType.Image || isCanvasVideoNode(data.type) ? "w-[580px]" : "w-[500px]")}>{renderPanel(data)}</div>
             ) : null}
         </div>
     );

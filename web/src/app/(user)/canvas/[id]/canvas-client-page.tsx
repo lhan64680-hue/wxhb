@@ -75,6 +75,7 @@ import {
     type CanvasImageGenerationType,
     type CanvasNodeData,
     type CanvasNodeMetadata,
+    type CanvasPointerTool,
     type CanvasPendingAgentRequest,
     type ConnectionHandle,
     type ContextMenuState,
@@ -378,6 +379,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     const [pendingConnectionCreate, setPendingConnectionCreate] = useState<PendingConnectionCreate | null>(null);
     const [mouseWorld, setMouseWorld] = useState<Position>({ x: 0, y: 0 });
     const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
+    const [pointerTool, setPointerTool] = useState<CanvasPointerTool>("select");
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [nodeCreatePosition, setNodeCreatePosition] = useState<Position | null>(null);
     const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
@@ -1321,13 +1323,8 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             if (pendingConnectionCreateRef.current) cancelPendingConnectionCreate();
             if (event.button !== 0) return;
 
-            if (!event.ctrlKey && !event.metaKey) {
-                setSelectionBox(null);
-                setSelectedNodeIds(new Set());
-                setSelectedConnectionId(null);
-                return;
-            }
-
+            setToolbarNodeId(null);
+            setDialogNodeId(null);
             const world = screenToCanvas(event.clientX, event.clientY);
             const nextSelectionBox = {
                 startWorldX: world.x,
@@ -1349,6 +1346,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     );
 
     const handleNodeMouseDown = useCallback((event: ReactMouseEvent, nodeId: string) => {
+        if (event.button !== 0) return;
         event.stopPropagation();
         setContextMenu(null);
         setHoveredNodeId(null);
@@ -1553,8 +1551,18 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     );
 
     useEffect(() => {
-        const handlePointerUp = (event: PointerEvent) => finishNodeDrag(event.clientX, event.clientY);
-        const cancelNodeDrag = () => finishNodeDrag();
+        const clearSelectionBox = () => {
+            selectionBoxRef.current = null;
+            setSelectionBox(null);
+        };
+        const handlePointerUp = (event: PointerEvent) => {
+            finishNodeDrag(event.clientX, event.clientY);
+            clearSelectionBox();
+        };
+        const cancelNodeDrag = () => {
+            finishNodeDrag();
+            clearSelectionBox();
+        };
         window.addEventListener("mousemove", handleGlobalMouseMove);
         window.addEventListener("mouseup", handleGlobalMouseUp);
         window.addEventListener("pointerup", handlePointerUp);
@@ -1727,6 +1735,12 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
 
             const key = event.key.toLowerCase();
             const isModifierShortcut = event.metaKey || event.ctrlKey;
+
+            if (!isModifierShortcut && !event.altKey && (key === "v" || key === "h")) {
+                event.preventDefault();
+                setPointerTool(key === "v" ? "select" : "hand");
+                return;
+            }
 
             if (isModifierShortcut && !event.altKey && key === "z") {
                 event.preventDefault();
@@ -4054,6 +4068,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 <InfiniteCanvas
                     containerRef={containerRef}
                     viewport={viewport}
+                    tool={pointerTool}
                     backgroundMode={backgroundMode}
                     onViewportChange={(next) => {
                         setViewport(next);
@@ -4301,6 +4316,10 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
 
                 <CanvasToolbar
                     selectedCount={selectedNodeIds.size}
+                    pointerTool={pointerTool}
+                    onPointerToolChange={setPointerTool}
+                    canGroup={selectedNodeIds.size >= 2 && nodes.filter((node) => selectedNodeIds.has(node.id)).every((node) => node.type !== CanvasNodeType.Group && !node.metadata?.groupId)}
+                    onGroup={() => createGroupFromSelection()}
                     canUndo={historyState.canUndo}
                     canRedo={historyState.canRedo}
                     backgroundMode={backgroundMode}
@@ -4315,7 +4334,6 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     onUpload={() => handleUploadRequest()}
                     onDelete={() => deleteNodes(new Set(selectedNodeIds))}
                     onClear={() => setClearConfirmOpen(true)}
-                    onDeselect={deselectCanvas}
                     onBackgroundModeChange={setBackgroundMode}
                     onShowImageInfoChange={setShowImageInfo}
                     onOpenAssetLibrary={() => {
